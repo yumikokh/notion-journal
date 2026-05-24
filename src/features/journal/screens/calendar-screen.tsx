@@ -54,7 +54,10 @@ export function CalendarScreen() {
   // would miss the ScreenContainer padding + iOS safe-area insets and let
   // the 7th column wrap.
   const [gridWidth, setGridWidth] = useState(0);
-  const cellWidth = gridWidth > 0 ? gridWidth / 7 : 0;
+  // Floor to avoid sub-pixel rounding pushing 7 × cellWidth past gridWidth,
+  // which makes the 7th column wrap on iOS Simulator (Web and real devices
+  // round differently).
+  const cellWidth = gridWidth > 0 ? Math.floor(gridWidth / 7) : 0;
   const cellHeight = cellWidth / CELL_ASPECT_RATIO;
 
   const [view, setView] = useState({
