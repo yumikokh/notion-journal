@@ -1,8 +1,9 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 
 import { snapshotToNotionUpdate } from '@/features/notion/mapping';
+import { PROPERTY_NAMES } from '@/features/notion/types';
 import type { TodayEntrySnapshot } from '@/features/notion/types';
-import { invokeNotionTodaySave } from '@/lib/supabase';
+import { invokeNotionTodaySave, type MonthEntry } from '@/lib/supabase';
 
 type SaveInput = {
   snapshot: TodayEntrySnapshot;
@@ -51,6 +52,51 @@ export function useSaveAll() {
     },
     onSuccess: (saved) => {
       qc.setQueryData<TodayEntrySnapshot>(['journal', 'today', saved.date], saved);
+      // Patch the month-level cache directly from the just-saved snapshot so
+      // the calendar reflects the change without a network round trip.
+      // If the month entries haven't been fetched yet, leave the cache alone
+      // — the next mount will fetch fresh data.
+      const yearMonth = saved.date.slice(0, 7);
+      qc.setQueryData<MonthEntry[]>(['journal', 'month', yearMonth], (prev) => {
+        if (!prev) return prev;
+        return upsertMonthEntry(prev, snapshotToMonthEntry(saved));
+      });
     },
   });
+}
+
+/**
+ * Project a TodayEntrySnapshot to the MonthEntry shape the calendar uses.
+ * The server keys habits by raw Notion property name (e.g. "Output"); we
+ * remap from the app-side lowercase HabitKey via PROPERTY_NAMES.
+ */
+export function snapshotToMonthEntry(snap: TodayEntrySnapshot): MonthEntry | null {
+  if (!snap.notionPageId) return null;
+  return {
+    pageId: snap.notionPageId,
+    date: snap.date,
+    feeling: snap.feeling,
+    feelingColor: snap.feelingColor,
+    icon: snap.icon,
+    habits: {
+      [PROPERTY_NAMES.output]: snap.habits.output,
+      [PROPERTY_NAMES.book]: snap.habits.book,
+      [PROPERTY_NAMES.design]: snap.habits.design,
+      [PROPERTY_NAMES.english]: snap.habits.english,
+      [PROPERTY_NAMES.exercise]: snap.habits.exercise,
+    },
+    diary: snap.diary,
+    coverUrl: snap.coverUrl,
+  };
+}
+
+export function upsertMonthEntry(list: MonthEntry[], next: MonthEntry | null): MonthEntry[] {
+  if (!next) return list;
+  const idx = list.findIndex((e) => e.date === next.date);
+  if (idx === -1) return [...list, next];
+  const copy = list.slice();
+  // Preserve any habit columns the server reported but the app doesn't model
+  // (the snapshot only knows the 5 typed habits).
+  copy[idx] = { ...next, habits: { ...copy[idx].habits, ...next.habits } };
+  return copy;
 }

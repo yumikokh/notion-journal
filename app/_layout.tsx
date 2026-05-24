@@ -15,10 +15,6 @@ export default function RootLayout() {
         <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
           <Stack screenOptions={{ headerShown: false }}>
             <Stack.Screen name="(tabs)" />
-            <Stack.Screen
-              name="day/[date]"
-              options={{ presentation: 'card', gestureEnabled: true }}
-            />
           </Stack>
           <StatusBar style="auto" />
         </ThemeProvider>

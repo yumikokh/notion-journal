@@ -3,7 +3,7 @@ import { useColorScheme } from 'react-native';
 
 import { Colors } from '@/constants/theme';
 
-/** Bottom tab bar: 今日 / カレンダー / ふりかえり / 設定. */
+/** Bottom tab bar: カレンダー / ふりかえり / 設定. */
 export default function AppTabs() {
   const scheme = useColorScheme();
   const colors = Colors[scheme === 'dark' ? 'dark' : 'light'];
@@ -14,11 +14,6 @@ export default function AppTabs() {
       indicatorColor={colors.backgroundElement}
       labelStyle={{ selected: { color: colors.text } }}>
       <NativeTabs.Trigger name="index">
-        <NativeTabs.Trigger.Icon sf="square.and.pencil" />
-        <NativeTabs.Trigger.Label>今日</NativeTabs.Trigger.Label>
-      </NativeTabs.Trigger>
-
-      <NativeTabs.Trigger name="calendar">
         <NativeTabs.Trigger.Icon sf="calendar" />
         <NativeTabs.Trigger.Label>カレンダー</NativeTabs.Trigger.Label>
       </NativeTabs.Trigger>

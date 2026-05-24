@@ -3,6 +3,7 @@ import {
   ActivityIndicator,
   Image,
   Pressable,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   View,
@@ -163,7 +164,18 @@ export function CalendarScreen() {
     <ScreenContainer>
       <ScrollView
         contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}>
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          envOk ? (
+            <RefreshControl
+              refreshing={entries.isRefetching}
+              onRefresh={() => {
+                entries.refetch();
+              }}
+              tintColor={theme.textSecondary}
+            />
+          ) : undefined
+        }>
         <View style={styles.header}>
           <View style={styles.headerSide}>
             <Pressable onPress={prevMonth} accessibilityLabel="前の月" style={styles.navBtn}>
