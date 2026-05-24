@@ -1,16 +1,19 @@
 {
   "expo": {
-    "name": "Nikki",
+    "name": "notion-journal",
     "slug": "notion-journal",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "nikki",
+    "scheme": "notion-journal",
     "userInterfaceStyle": "automatic",
     "ios": {
       "icon": "./assets/expo.icon",
       "supportsTablet": false,
-      "bundleIdentifier": "com.yumikokh.nikki"
+      "bundleIdentifier": "com.yumikokh.notion-journal",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -41,6 +44,13 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "d1c9323e-76e4-4e17-8e70-b0e4747d5879"
+      }
+    },
+    "owner": "yumikokh"
   }
 }

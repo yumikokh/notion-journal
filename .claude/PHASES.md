@@ -34,7 +34,6 @@ iOS 単体・個人利用ツールとして開発。Web対応・課金（Revenue
 - [ ] TanStack Query 永続キャッシュ設定
 - [ ] Calendar画面: 月間カレンダー（Feeling表示・記録ドット）
 - [ ] 過去エントリ閲覧・編集
-- [ ] **日次送り閲覧**（左右スワイプで前後日遷移）
 - [ ] AIチャット Edge Function（Claude API）
 - [ ] Reflect画面: チャットUI + プリセットプロンプト
 - [ ] AI会話履歴を expo-sqlite に保存

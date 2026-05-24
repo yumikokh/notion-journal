@@ -5,7 +5,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
  * `null` means "use the default in `ai-prompt.ts`".
  */
 
-const KEY = 'nikki.ai_prompt';
+const KEY = 'notion-journal.ai_prompt';
 
 export async function loadCustomPrompt(): Promise<string | null> {
   try {
