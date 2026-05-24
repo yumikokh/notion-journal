@@ -103,6 +103,16 @@ export type MonthEntry = {
   feelingColor: NotionSelectColor | null;
   /** Page icon set in Notion (emoji or URL); null when unset. */
   icon: MonthEntryIcon | null;
+  /**
+   * Habit checkbox state by property key (output/book/design/english/exercise).
+   * Lower-case keys match the app's `HabitKey`; Notion property names are
+   * mapped on the server side.
+   */
+  habits: Record<string, boolean>;
+  /** Diary rich_text property contents. Used in the month list view. */
+  diary: string;
+  /** Page cover URL (Notion-hosted or external); null when unset. */
+  coverUrl: string | null;
 };
 
 export function invokeNotionMonthGet(payload: { yearMonth: string }) {

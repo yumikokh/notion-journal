@@ -3,7 +3,30 @@ import { describe, expect, it } from '@jest/globals';
 import { emptySnapshot } from '@/features/notion/mapping';
 import type { TodayEntrySnapshot } from '@/features/notion/types';
 
-import { draftReducer, draftToSnapshot, EMPTY_DRAFT, snapshotToDraft } from './draft';
+import {
+  draftReducer,
+  draftToSnapshot,
+  EMPTY_DRAFT,
+  HABIT_ICONS,
+  HABIT_KEYS,
+  HABITS,
+  isDraftDirty,
+  snapshotToDraft,
+} from './draft';
+
+describe('HABITS', () => {
+  it('has an emoji icon for every habit key', () => {
+    for (const { key, icon } of HABITS) {
+      expect(typeof icon).toBe('string');
+      expect(icon.length).toBeGreaterThan(0);
+      expect(HABIT_ICONS[key]).toBe(icon);
+    }
+  });
+
+  it('HABIT_KEYS lists every key once in declaration order', () => {
+    expect(HABIT_KEYS).toEqual(HABITS.map((h) => h.key));
+  });
+});
 
 describe('draftReducer', () => {
   it('updates the free-form text without touching structured fields', () => {
@@ -98,6 +121,64 @@ describe('snapshotToDraft', () => {
     expect(draft.diary).toBe('日記');
     expect(draft.habits.exercise).toBe(true);
     expect('tracked' in draft).toBe(false);
+  });
+});
+
+describe('isDraftDirty', () => {
+  const baseSnap: TodayEntrySnapshot = {
+    ...emptySnapshot('2026-05-25'),
+    feeling: '(^^)',
+    diary: 'AIまとめ',
+    habits: {
+      output: true,
+      book: false,
+      design: false,
+      english: false,
+      exercise: false,
+    },
+    bodyMarkdown: 'もとの本文',
+  };
+
+  it('is false for a draft that equals the server snapshot', () => {
+    const draft = snapshotToDraft(baseSnap);
+    expect(isDraftDirty(draft, baseSnap, baseSnap.bodyMarkdown, false)).toBe(false);
+  });
+
+  it('is true when a pending cover photo is set, even with no other changes', () => {
+    const draft = snapshotToDraft(baseSnap);
+    expect(isDraftDirty(draft, baseSnap, baseSnap.bodyMarkdown, true)).toBe(true);
+  });
+
+  it('is true when the feeling changes', () => {
+    const draft = { ...snapshotToDraft(baseSnap), feeling: '(TT)' as const };
+    expect(isDraftDirty(draft, baseSnap, baseSnap.bodyMarkdown, false)).toBe(true);
+  });
+
+  it('is true when a habit toggles', () => {
+    const draft = snapshotToDraft(baseSnap);
+    draft.habits = { ...draft.habits, book: true };
+    expect(isDraftDirty(draft, baseSnap, baseSnap.bodyMarkdown, false)).toBe(true);
+  });
+
+  it('compares body against lastSyncedBody, not the stale snapshot', () => {
+    // After save, lastSyncedBody is updated; the snapshot may lag.
+    const draft = { ...snapshotToDraft(baseSnap), freeText: '保存済みの新本文' };
+    expect(isDraftDirty(draft, baseSnap, '保存済みの新本文', false)).toBe(false);
+  });
+
+  it('falls back to snapshot body when lastSyncedBody is null (initial load)', () => {
+    const draft = { ...snapshotToDraft(baseSnap), freeText: 'いじった' };
+    expect(isDraftDirty(draft, baseSnap, null, false)).toBe(true);
+  });
+
+  it('treats a new page (no snapshot) with whitespace-only content as not dirty', () => {
+    const draft = { ...EMPTY_DRAFT, freeText: '   \n  ' };
+    expect(isDraftDirty(draft, null, null, false)).toBe(false);
+  });
+
+  it('treats a new page (no snapshot) with any real content as dirty', () => {
+    const draft = { ...EMPTY_DRAFT, diary: '一行' };
+    expect(isDraftDirty(draft, null, null, false)).toBe(true);
   });
 });
 

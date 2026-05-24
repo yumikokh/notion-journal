@@ -16,6 +16,7 @@ const NOTION_DATA_SOURCE_ID =
 type NotionPage = {
   id: string;
   icon?: NotionIcon | null;
+  cover?: NotionCover | null;
   properties?: Record<string, unknown>;
 };
 
@@ -23,6 +24,11 @@ type NotionIcon =
   | { type: 'emoji'; emoji: string }
   | { type: 'external'; external: { url: string } }
   | { type: 'file'; file: { url: string } };
+
+type NotionCover =
+  | { type: 'external'; external: { url: string } }
+  | { type: 'file'; file: { url: string } }
+  | { type: 'file_upload'; file_upload: { url?: string } };
 
 type QueryResponse = {
   results?: NotionPage[];
@@ -40,7 +46,29 @@ type MonthEntry = {
   feeling: string | null;
   feelingColor: string | null;
   icon: MonthEntryIcon | null;
+  habits: Record<string, boolean>;
+  diary: string;
+  coverUrl: string | null;
 };
+
+function extractCoverUrl(cover: NotionCover | null | undefined): string | null {
+  if (!cover) return null;
+  if (cover.type === 'external') return cover.external.url;
+  if (cover.type === 'file') return cover.file.url;
+  if (cover.type === 'file_upload') return cover.file_upload.url ?? null;
+  return null;
+}
+
+// Notion property names that are NOT habits even if their type is checkbox.
+// Add property names here if the schema grows non-habit checkboxes.
+const NON_HABIT_CHECKBOX_PROPS = new Set<string>([]);
+
+type RichTextItem = { plain_text?: string };
+
+function richTextToString(rt: RichTextItem[] | undefined): string {
+  if (!rt || rt.length === 0) return '';
+  return rt.map((r) => r.plain_text ?? '').join('');
+}
 
 function normalizeIcon(icon: NotionIcon | null | undefined): MonthEntryIcon | null {
   if (!icon) return null;
@@ -95,12 +123,29 @@ Deno.serve(async (req) => {
           | undefined;
         const date = dateProp?.date?.start;
         if (!date) continue;
+
+        // Dynamic habit detection: every checkbox property on the page is
+        // surfaced as a habit, keyed by its Notion property name.
+        const habits: Record<string, boolean> = {};
+        for (const [name, raw] of Object.entries(props)) {
+          if (NON_HABIT_CHECKBOX_PROPS.has(name)) continue;
+          const prop = raw as { type?: string; checkbox?: boolean } | undefined;
+          if (prop?.type === 'checkbox') {
+            habits[name] = prop.checkbox === true;
+          }
+        }
+
+        const diaryProp = props.Diary as { rich_text?: RichTextItem[] } | undefined;
+
         entries.push({
           pageId: page.id,
           date,
           feeling: feelingProp?.select?.name ?? null,
           feelingColor: feelingProp?.select?.color ?? null,
           icon: normalizeIcon(page.icon ?? null),
+          habits,
+          diary: richTextToString(diaryProp?.rich_text),
+          coverUrl: extractCoverUrl(page.cover ?? null),
         });
       }
 
