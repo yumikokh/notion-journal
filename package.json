@@ -42,6 +42,8 @@
     "eslint": "^9.39.4",
     "eslint-config-expo": "^56.0.4",
     "jest-expo": "~56.0.4",
+    "patch-package": "^8.0.1",
+    "postinstall-postinstall": "^2.1.0",
     "prettier": "^3.8.3",
     "typescript": "~6.0.3"
   },
@@ -54,7 +56,8 @@
     "lint": "expo lint",
     "typecheck": "tsc --noEmit",
     "test": "jest",
-    "format": "prettier --write ."
+    "format": "prettier --write .",
+    "postinstall": "patch-package"
   },
   "jest": {
     "preset": "jest-expo",
