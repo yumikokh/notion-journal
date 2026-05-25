@@ -1,5 +1,4 @@
 import * as Notifications from 'expo-notifications';
-import { Platform } from 'react-native';
 
 import { buildSchedule } from './build-schedule';
 import { type ReminderSettings } from './reminder-prefs';
@@ -97,11 +96,6 @@ export async function rescheduleReminders({
   recordedDates,
   now = new Date(),
 }: RescheduleInput): Promise<RescheduleResult> {
-  // Web has no native notifications in this app's target — bail cheaply.
-  if (Platform.OS === 'web') {
-    return { scheduledCount: 0, permissionGranted: false };
-  }
-
   const nothingEnabled = !settings.dailyEnabled && !settings.weeklyEnabled;
 
   // Always cancel previous reminders so disabling actually disables them.
