@@ -122,3 +122,7 @@ export type MonthEntry = {
 export function invokeNotionMonthGet(payload: { yearMonth: string }) {
   return invoke<{ entries: MonthEntry[] }>('notion-month-get', payload);
 }
+
+export function invokeAiWeeklyAnalyze(payload: { weekStart: string; weekEnd: string }) {
+  return invoke<unknown>('ai-weekly-analyze', payload);
+}
