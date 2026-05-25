@@ -1,7 +1,7 @@
 # Nikki (notion-journal)
 
-Notion連携のジャーナル＆AIふりかえりアプリ（iOS）。
-既存のNotionデイリー/ウィークリージャーナルDBと連携し、スマホ最適化UIとAIふりかえり機能を提供する。
+Notion連携のジャーナル & AI週次分析アプリ（iOS）。
+既存のNotionデイリー/ウィークリージャーナルDBと連携し、スマホ最適化UIと、カレンダー実績を取り込んだ週次AI分析機能を提供する。
 個人利用ツールとして開発する（Web対応・課金・オフライン同期はスコープ外）。
 
 ## Stack
@@ -12,6 +12,8 @@ Notion連携のジャーナル＆AIふりかえりアプリ（iOS）。
 - TanStack Query（サーバー状態管理・永続キャッシュ）
 - Supabase (Auth, Edge Functions / TypeScript・Deno)
 - Notion API (OAuth 2.0)
+- Google Calendar API (OAuth 2.0) + iCal フィード取得
+- Claude API (週次分析のワンショット呼び出し)
 - expo-notifications（リマインダー）
 - ウィジェット: WidgetKit (Swift) ※後フェーズ。`@bacons/apple-targets` 等で App Extension として追加
 
@@ -34,7 +36,7 @@ npx eas submit --platform ios     # TestFlight 提出
 - ルーティングは `app/` ディレクトリ（Expo Router）
 - サーバー状態は TanStack Query で管理。**Notion がデータの source of truth**
 - Notion へのアクセスは必ず Supabase Edge Function 経由（クライアントから直接叩かない）
-- ローカルDBは持たない方針。AIふりかえりの会話履歴のみ expo-sqlite に保存、設定は AsyncStorage
+- ローカルDBは持たない。設定は AsyncStorage、トークンは expo-secure-store（AI週次分析の結果は TanStack Query のキャッシュに乗るだけで、永続化しない）
 - オフライン対応は優先度低（TanStack Query の永続キャッシュで読み返しの体感速度を担保する程度）
 
 ## Conventions
