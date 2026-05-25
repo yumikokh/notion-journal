@@ -1,5 +1,6 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 
+import { rescheduleFromCache } from '@/features/notifications/reschedule-from-cache';
 import { snapshotToNotionUpdate } from '@/features/notion/mapping';
 import { PROPERTY_NAMES } from '@/features/notion/types';
 import type { TodayEntrySnapshot } from '@/features/notion/types';
@@ -61,6 +62,10 @@ export function useSaveAll() {
         if (!prev) return prev;
         return upsertMonthEntry(prev, snapshotToMonthEntry(saved));
       });
+      // Reschedule reminders so today's reminder is dropped if
+      // `skipIfRecorded` is on. Fire-and-forget — the cache patch above
+      // already made today visible to `rescheduleFromCache`.
+      void rescheduleFromCache(qc);
     },
   });
 }

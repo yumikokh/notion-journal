@@ -1,3 +1,4 @@
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
@@ -132,6 +133,22 @@ export function CalendarScreen() {
     setDrawerDate(dateKey);
   }, []);
   const closeDrawer = useCallback(() => setDrawerDate(null), []);
+
+  // Deep link from a tapped reminder notification: `/(tabs)?date=YYYY-MM-DD`.
+  // The URL is the external system here — when the param changes we mirror
+  // it into local state (month + drawer date) and then clear the param so
+  // navigating back to the calendar tab doesn't re-trigger the drawer.
+  const params = useLocalSearchParams<{ date?: string | string[] }>();
+  const router = useRouter();
+  useEffect(() => {
+    const raw = Array.isArray(params.date) ? params.date[0] : params.date;
+    if (!raw || !/^\d{4}-\d{2}-\d{2}$/.test(raw)) return;
+    const [yearStr, monthStr] = raw.split('-');
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- syncing URL param into local UI state on change is exactly the subscription pattern.
+    setView({ year: Number(yearStr), month: Number(monthStr) - 1 });
+    setDrawerDate(raw);
+    router.setParams({ date: undefined });
+  }, [params.date, router]);
 
   const updatePrefs = useCallback((mutate: (prev: CalendarPrefs) => CalendarPrefs) => {
     setPrefs((prev) => {

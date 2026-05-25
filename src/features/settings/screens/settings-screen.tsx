@@ -4,6 +4,7 @@ import { Alert, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react
 import { ScreenContainer } from '@/components/screen-container';
 import { ThemedText } from '@/components/themed-text';
 import { BottomTabInset, Spacing } from '@/constants/theme';
+import { ReminderSection } from '@/features/notifications/components/reminder-section';
 import {
   clearCustomPrompt,
   loadCustomPrompt,
@@ -54,6 +55,8 @@ export function SettingsScreen() {
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}>
         <ThemedText type="subtitle">設定</ThemedText>
+
+        <ReminderSection />
 
         <View style={styles.section}>
           <ThemedText type="smallBold" themeColor="textSecondary" style={styles.sectionLabel}>
