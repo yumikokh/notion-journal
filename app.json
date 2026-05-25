@@ -53,6 +53,12 @@
         "projectId": "d1c9323e-76e4-4e17-8e70-b0e4747d5879"
       }
     },
-    "owner": "yumikokh"
+    "owner": "yumikokh",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/d1c9323e-76e4-4e17-8e70-b0e4747d5879"
+    }
   }
 }

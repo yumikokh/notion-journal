@@ -22,6 +22,7 @@
     "expo-status-bar": "~56.0.4",
     "expo-symbols": "~56.0.5",
     "expo-system-ui": "~56.0.5",
+    "expo-updates": "~56.0.16",
     "expo-web-browser": "~56.0.5",
     "japanese-holidays": "^1.0.10",
     "lucide-react-native": "^1.16.0",
@@ -55,7 +56,9 @@
     "typecheck": "tsc --noEmit",
     "test": "jest",
     "format": "prettier --write .",
-    "postinstall": "patch-package"
+    "postinstall": "patch-package",
+    "build:preview": "eas build --profile preview --platform ios",
+    "update:preview": "eas update --branch preview --environment preview"
   },
   "jest": {
     "preset": "jest-expo",
