@@ -430,3 +430,6 @@ verify_jwt = false
 
 [functions.notion-cover-upload]
 verify_jwt = false
+
+[functions.notion-cover-remove]
+verify_jwt = false

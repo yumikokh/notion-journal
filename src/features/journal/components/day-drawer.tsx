@@ -1,8 +1,9 @@
 import * as ImagePicker from 'expo-image-picker';
-import { Sparkles } from 'lucide-react-native';
+import { Sparkles, Trash2 } from 'lucide-react-native';
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   Image,
   KeyboardAvoidingView,
   Modal,
@@ -30,6 +31,7 @@ import {
   type UserDraftAction,
 } from '@/features/journal/draft';
 import { useAiStructure } from '@/features/journal/use-ai-structure';
+import { useRemoveCover } from '@/features/journal/use-remove-cover';
 import { useSaveAll } from '@/features/journal/use-save-today';
 import { useTodayEntry } from '@/features/journal/use-today-entry';
 import { useUploadCover } from '@/features/journal/use-upload-cover';
@@ -107,6 +109,7 @@ function DayDrawerContent({
   const entry = useTodayEntry(date, { enabled: envOk });
   const saveAll = useSaveAll();
   const uploadCover = useUploadCover();
+  const removeCover = useRemoveCover();
   const ai = useAiStructure();
 
   // Merge the calendar-derived color map with the color of THIS entry's
@@ -150,7 +153,7 @@ function DayDrawerContent({
     [draft, entry.data, lastSyncedBody, pendingPhoto],
   );
 
-  const isSaving = saveAll.isPending || uploadCover.isPending;
+  const isSaving = saveAll.isPending || uploadCover.isPending || removeCover.isPending;
 
   const doSave = useCallback(async () => {
     const snap = draftToSnapshot(draft, baseSnap);
@@ -214,6 +217,40 @@ function DayDrawerContent({
         onSuccess: (output) => dispatch({ type: 'apply-ai', diary: output.diary }),
       },
     );
+  };
+
+  const removeCoverNow = async () => {
+    // Pending (not yet saved) photo: clear local state only — never hit Notion.
+    if (pendingPhoto) {
+      setPendingPhoto(null);
+      return;
+    }
+    // No saved cover, nothing to do.
+    const pageId = entry.data?.notionPageId;
+    if (!pageId) return;
+    await removeCover.mutateAsync({ notionPageId: pageId, date });
+  };
+
+  const handleRemoveCover = () => {
+    // Skip confirmation for pending-only state — there's nothing destructive
+    // to confirm, the user can just pick a new photo or re-tap if they meant
+    // to keep it.
+    if (pendingPhoto && !entry.data?.coverUrl) {
+      setPendingPhoto(null);
+      return;
+    }
+    Alert.alert('カバー写真を削除', 'Notion ページのカバーを外します。よろしいですか？', [
+      { text: 'キャンセル', style: 'cancel' },
+      {
+        text: '削除',
+        style: 'destructive',
+        onPress: () => {
+          removeCoverNow().catch(() => {
+            // Error surfaces via the error banner (removeCover.error).
+          });
+        },
+      },
+    ]);
   };
 
   const pickPhoto = async () => {
@@ -301,7 +338,7 @@ function DayDrawerContent({
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}>
             {/* Errors */}
-            {(entry.error || saveAll.error || ai.error || uploadCover.error) && (
+            {(entry.error || saveAll.error || ai.error || uploadCover.error || removeCover.error) && (
               <View
                 style={[
                   styles.errorBanner,
@@ -320,6 +357,11 @@ function DayDrawerContent({
                 {uploadCover.error && (
                   <ThemedText type="small" style={styles.errorText}>
                     🖼️ カバー: {uploadCover.error.message}
+                  </ThemedText>
+                )}
+                {removeCover.error && (
+                  <ThemedText type="small" style={styles.errorText}>
+                    🗑️ カバー削除: {removeCover.error.message}
                   </ThemedText>
                 )}
                 {ai.error && (
@@ -351,6 +393,21 @@ function DayDrawerContent({
                       </ThemedText>
                     </View>
                   )}
+                  <Pressable
+                    onPress={handleRemoveCover}
+                    disabled={isSaving}
+                    accessibilityRole="button"
+                    accessibilityLabel={pendingPhoto ? '選択した写真をやめる' : 'カバー写真を削除'}
+                    hitSlop={8}
+                    style={({ pressed }) => [
+                      styles.coverRemoveBtn,
+                      {
+                        backgroundColor: 'rgba(0,0,0,0.55)',
+                        opacity: pressed ? 0.7 : isSaving ? 0.4 : 1,
+                      },
+                    ]}>
+                    <Trash2 size={16} color="#ffffff" strokeWidth={2} />
+                  </Pressable>
                 </View>
               ) : (
                 <View
@@ -634,6 +691,17 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.two,
     paddingVertical: Spacing.half,
     borderRadius: Spacing.three,
+  },
+  coverRemoveBtn: {
+    position: 'absolute',
+    top: Spacing.two,
+    // Sit on the LEFT so it never overlaps the "保存待ち" badge on the right.
+    left: Spacing.two,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 
   body: {

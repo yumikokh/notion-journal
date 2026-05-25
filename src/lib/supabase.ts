@@ -75,6 +75,10 @@ export function invokeNotionCoverUpload(payload: {
   return invoke<{ fileUploadId: string }>('notion-cover-upload', payload);
 }
 
+export function invokeNotionCoverRemove(payload: { notionPageId: string }) {
+  return invoke<{ ok: true }>('notion-cover-remove', payload);
+}
+
 /**
  * Notion's built-in `select` palette name (e.g. 'green', 'red'). The set is
  * fixed by Notion; mapped to theme colors in `features/notion/colors.ts`.
