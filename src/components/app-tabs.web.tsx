@@ -9,7 +9,7 @@ import { Tabs } from 'expo-router';
 export default function AppTabs() {
   return (
     <Tabs screenOptions={{ headerShown: false }}>
-      <Tabs.Screen name="index" options={{ title: 'カレンダー' }} />
+      <Tabs.Screen name="index" options={{ title: '日記' }} />
       <Tabs.Screen name="reflect" options={{ title: 'ふりかえり' }} />
       <Tabs.Screen name="settings" options={{ title: '設定' }} />
     </Tabs>
