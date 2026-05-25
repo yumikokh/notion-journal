@@ -10,7 +10,10 @@
 |---|---|---|---|
 | `notion-today-get` | `{ date: "YYYY-MM-DD" }` | `{ page, bodyMarkdown }` | 2026/Daily DB から指定日のページ + 本文を取得 |
 | `notion-today-save` | `{ notionPageId, date, properties, bodyMarkdown }` | `{ notionPageId }` | ページ作成 or 更新 + 本文置換 |
-| `ai-structure` | `{ bodyText }` | `{ structured }` | Claude で本文を構造化 |
+| `notion-month-get` | `{ yearMonth: "YYYY-MM" }` | `{ entries }` | カレンダー表示用の月次サマリー取得 |
+| `notion-cover-upload` | `{ notionPageId, base64, mime, filename }` | `{ ok }` | ページカバー画像のアップロード |
+| `ai-structure` | `{ bodyText, systemPrompt? }` | `{ diary }` | Claude で本文を日記ハイライトに要約 |
+| `ai-weekly-analyze` | `{ weekStart, weekEnd }` (どちらも YYYY-MM-DD、weekEnd は含む) | `{ analysis, source }` | 指定週の Daily を集約して週次AI分析（summary / patterns / kpt / nextFocus）|
 
 ## 初回セットアップ
 
@@ -35,7 +38,10 @@ supabase secrets set ANTHROPIC_API_KEY=sk-ant-xxx
 # 6. デプロイ
 supabase functions deploy notion-today-get
 supabase functions deploy notion-today-save
+supabase functions deploy notion-month-get
+supabase functions deploy notion-cover-upload
 supabase functions deploy ai-structure
+supabase functions deploy ai-weekly-analyze
 ```
 
 ## ローカルでのテスト
@@ -49,6 +55,12 @@ curl -i -X POST http://127.0.0.1:54321/functions/v1/notion-today-get \
   -H "Authorization: Bearer $SUPABASE_ANON_KEY" \
   -H "Content-Type: application/json" \
   -d '{"date":"2026-05-24"}'
+
+# 週次AI分析（weekEnd は含む。日曜終わりの週なら 2026-05-18 〜 2026-05-24）
+curl -i -X POST http://127.0.0.1:54321/functions/v1/ai-weekly-analyze \
+  -H "Authorization: Bearer $SUPABASE_ANON_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"weekStart":"2026-05-18","weekEnd":"2026-05-24"}'
 ```
 
 ローカル用の `supabase/.env.local`（gitignore 推奨）:
