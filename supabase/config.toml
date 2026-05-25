@@ -433,3 +433,6 @@ verify_jwt = false
 
 [functions.notion-cover-remove]
 verify_jwt = false
+
+[functions.ai-weekly-analyze]
+verify_jwt = false
