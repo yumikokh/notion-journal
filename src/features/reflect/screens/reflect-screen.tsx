@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Pressable,
@@ -16,6 +16,7 @@ import { isSupabaseEnvConfigured } from '@/lib/env';
 
 import { AnalysisResult } from '../components/analysis-result';
 import { WeekPicker } from '../components/week-picker';
+import { useSaveWeeklyAnalysis } from '../use-save-weekly-analysis';
 import { useWeeklyAnalysis } from '../use-weekly-analysis';
 import { getWeekRange, isSameWeek, shiftWeek, type WeekRange } from '../week-range';
 
@@ -34,6 +35,16 @@ export function ReflectScreen() {
   const wasAnalyzed = analyzedWeeks.has(range.start);
 
   const query = useWeeklyAnalysis(range, envOk && wasAnalyzed);
+  const saveMutation = useSaveWeeklyAnalysis(range);
+
+  // Reset the save state when the analysis changes underneath it — either the
+  // user switched weeks or regenerated — so a stale "保存済み" never lingers
+  // over a result that hasn't actually been saved yet.
+  useEffect(() => {
+    saveMutation.reset();
+    // saveMutation is stable across renders; only re-run when the result changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [range.start, query.dataUpdatedAt]);
 
   const handleAnalyze = () => {
     setAnalyzedWeeks((prev) => {
@@ -46,6 +57,14 @@ export function ReflectScreen() {
 
   const handleRegenerate = () => {
     query.refetch();
+  };
+
+  const handleSave = () => {
+    if (!query.data) return;
+    saveMutation.mutate({
+      analysis: query.data.analysis,
+      dailyCount: query.data.source.dailyCount,
+    });
   };
 
   const canGoNext = !isSameWeek(range, currentWeek);
@@ -123,14 +142,39 @@ export function ReflectScreen() {
               analysis={query.data.analysis}
               dailyCount={query.data.source.dailyCount}
             />
-            <Pressable
-              onPress={handleRegenerate}
-              style={({ pressed }) => [
-                styles.secondaryButton,
-                { borderColor: theme.text, opacity: pressed ? 0.6 : 1 },
-              ]}>
-              <ThemedText>再生成</ThemedText>
-            </Pressable>
+            <View style={styles.actions}>
+              <Pressable
+                onPress={handleSave}
+                disabled={saveMutation.isPending}
+                style={({ pressed }) => [
+                  styles.button,
+                  {
+                    backgroundColor: saveMutation.isSuccess ? '#22a06b' : theme.text,
+                    opacity: pressed || saveMutation.isPending ? 0.7 : 1,
+                  },
+                ]}>
+                <ThemedText style={[styles.buttonText, { color: theme.background }]}>
+                  {saveMutation.isPending
+                    ? '保存中…'
+                    : saveMutation.isSuccess
+                      ? 'Notionに保存済み ✓'
+                      : 'Notionに保存'}
+                </ThemedText>
+              </Pressable>
+              <Pressable
+                onPress={handleRegenerate}
+                style={({ pressed }) => [
+                  styles.secondaryButton,
+                  { borderColor: theme.text, opacity: pressed ? 0.6 : 1 },
+                ]}>
+                <ThemedText>再生成</ThemedText>
+              </Pressable>
+            </View>
+            {saveMutation.error ? (
+              <ThemedText themeColor="textSecondary" type="small" style={styles.saveError} selectable>
+                保存に失敗しました: {saveMutation.error.message}
+              </ThemedText>
+            ) : null}
           </>
         ) : null}
       </ScrollView>
@@ -185,5 +229,13 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.two,
     borderRadius: 999,
     borderWidth: 1,
+  },
+  actions: {
+    alignItems: 'center',
+    gap: Spacing.two,
+  },
+  saveError: {
+    textAlign: 'center',
+    color: '#d05545',
   },
 });

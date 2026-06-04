@@ -79,8 +79,8 @@ function BulletList({ items }: { items: string[] }) {
   );
 }
 
-// Notion KPT DB への保存アクションは #16 待ち。それまでは `selectable`
-// でユーザーが長押し → コピーできるよう、テキストを選択可能にしておく。
+// Notion への保存は ReflectScreen の「Notionに保存」ボタンが担う（#16）。
+// テキストは `selectable` のままにして、個別の項目を長押しコピーもできる。
 const TONE_COLORS = {
   keep: '#22a06b',
   problem: '#d05545',

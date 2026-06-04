@@ -139,12 +139,15 @@ export function invokeNotionWeeklyGet(payload: { weekStart: string; weekEnd: str
 /**
  * Create or update a weekly reflection. On create the server sets
  * Name/Date/Type="Weekly"; on update only `properties` are touched.
+ * When `bodyMarkdown` is supplied, the page body is replaced with it
+ * (used to persist the full AI weekly analysis, #16).
  */
 export function invokeNotionWeeklySave(payload: {
   notionPageId: string | null;
   date: string;
   name?: string;
   properties: Record<string, unknown>;
+  bodyMarkdown?: string;
 }) {
   return invoke<{ notionPageId: string }>('notion-weekly-save', payload);
 }

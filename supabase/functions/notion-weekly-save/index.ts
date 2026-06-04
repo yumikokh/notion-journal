@@ -6,6 +6,7 @@
 //     date: "YYYY-MM-DD",            // week anchor (Sunday); set as Date on create
 //     name?: string,                 // page title on create (e.g. "5/26 - 6/1")
 //     properties: { ... },           // reflection rich_text fields
+//     bodyMarkdown?: string,         // optional: replace the page body (AI analysis, #16)
 //   }
 //
 // Behaviour:
@@ -13,6 +14,9 @@
 //     Type = "Weekly" are set alongside the supplied reflection properties.
 //   - On update: only the supplied `properties` are touched — Name/Date/Type
 //     are left as the user set them.
+//   - When `bodyMarkdown` is present, the page body is replaced with it after
+//     the property write. Used to persist the full AI weekly analysis (#16);
+//     omitted by the plain reflection save, which has no body.
 
 import { handleOptions, json } from '../_shared/cors.ts';
 import { NotionClient, NotionError } from '../_shared/notion.ts';
@@ -28,6 +32,7 @@ type SaveRequest = {
   date: string;
   name?: string;
   properties: Record<string, unknown>;
+  bodyMarkdown?: string;
 };
 
 type PageResponse = { id: string };
@@ -66,6 +71,13 @@ Deno.serve(async (req) => {
     } else {
       // UPDATE: reflection fields only; leave Name/Date/Type untouched.
       await notion.updatePageProperties(pageId, body.properties);
+    }
+
+    // Optionally replace the page body with the supplied markdown (#16).
+    // `replace_content` is fine here: the body is a regenerated AI analysis,
+    // so there are no hand-authored non-text blocks to preserve.
+    if (typeof body.bodyMarkdown === 'string') {
+      await notion.replacePageMarkdown(pageId, body.bodyMarkdown);
     }
 
     return json({ notionPageId: pageId });
