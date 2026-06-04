@@ -4,6 +4,7 @@ import { Alert, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react
 import { ScreenContainer } from '@/components/screen-container';
 import { ThemedText } from '@/components/themed-text';
 import { BottomTabInset, Spacing } from '@/constants/theme';
+import { GoogleSection } from '@/features/calendar/components/google-section';
 import { ReminderSection } from '@/features/notifications/components/reminder-section';
 import {
   clearCustomPrompt,
@@ -57,6 +58,8 @@ export function SettingsScreen() {
         <ThemedText type="subtitle">設定</ThemedText>
 
         <ReminderSection />
+
+        <GoogleSection />
 
         <View style={styles.section}>
           <ThemedText type="smallBold" themeColor="textSecondary" style={styles.sectionLabel}>

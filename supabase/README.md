@@ -14,6 +14,11 @@
 | `notion-cover-upload` | `{ notionPageId, base64, mime, filename }` | `{ ok }` | ページカバー画像のアップロード |
 | `ai-structure` | `{ bodyText, systemPrompt? }` | `{ diary }` | Claude で本文を日記ハイライトに要約 |
 | `ai-weekly-analyze` | `{ weekStart, weekEnd }` (どちらも YYYY-MM-DD、weekEnd は含む) | `{ analysis, source }` | 指定週の Daily を集約して週次AI分析（summary / patterns / kpt / nextFocus）|
+| `google-oauth-exchange` | `{ code, codeVerifier, redirectUri }` | `{ ok, scope }` | PKCE 認可コードを refresh_token に交換し `public.google_oauth` に保存 |
+| `google-oauth-status` | なし | `{ connected, scope?, connectedAt? }` | 接続状態を返す |
+| `google-oauth-disconnect` | なし | `{ ok }` | refresh_token を削除 + Google に revoke (best-effort) |
+| `google-calendar-list` | `{ timeMin, timeMax, calendarId? }` (ISO 8601) | `{ events: { start, end, summary, description?, calendarId }[] }` | 指定範囲の予定を取得（refresh_token から access_token を都度更新） |
+| `google-oauth-redirect` | (GET, ブラウザから) | HTML (302 相当) | Google が HTTPS のみ許可する OAuth redirect を受け、`notion-journal://google-oauth?...` にブリッジするだけ |
 
 ## 初回セットアップ
 
@@ -34,6 +39,8 @@ supabase link --project-ref <your-project-ref>
 supabase secrets set NOTION_TOKEN=secret_xxx
 supabase secrets set NOTION_DB_ID=9d854c37-a54c-835f-b449-876db44cf666
 supabase secrets set ANTHROPIC_API_KEY=sk-ant-xxx
+supabase secrets set GOOGLE_OAUTH_CLIENT_ID=xxxxxxxx.apps.googleusercontent.com
+supabase secrets set GOOGLE_OAUTH_CLIENT_SECRET=xxx
 
 # 6. デプロイ
 supabase functions deploy notion-today-get
@@ -42,6 +49,14 @@ supabase functions deploy notion-month-get
 supabase functions deploy notion-cover-upload
 supabase functions deploy ai-structure
 supabase functions deploy ai-weekly-analyze
+supabase functions deploy google-oauth-exchange
+supabase functions deploy google-oauth-status
+supabase functions deploy google-oauth-disconnect
+supabase functions deploy google-calendar-list
+supabase functions deploy google-oauth-redirect
+
+# DB migration (google_oauth テーブル) を反映
+supabase db push
 ```
 
 ## ローカルでのテスト

@@ -436,3 +436,18 @@ verify_jwt = false
 
 [functions.ai-weekly-analyze]
 verify_jwt = false
+
+[functions.google-oauth-exchange]
+verify_jwt = false
+
+[functions.google-oauth-status]
+verify_jwt = false
+
+[functions.google-oauth-disconnect]
+verify_jwt = false
+
+[functions.google-calendar-list]
+verify_jwt = false
+
+[functions.google-oauth-redirect]
+verify_jwt = false
