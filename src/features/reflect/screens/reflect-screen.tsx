@@ -122,6 +122,7 @@ export function ReflectScreen() {
             <AnalysisResult
               analysis={query.data.analysis}
               dailyCount={query.data.source.dailyCount}
+              calendarEventCount={query.data.source.calendarEventCount}
             />
             <Pressable
               onPress={handleRegenerate}

@@ -21,7 +21,15 @@ export type WeeklyAnalysis = {
 
 export type WeeklyAnalysisResponse = {
   analysis: WeeklyAnalysis;
-  source: { dailyCount: number };
+  source: {
+    dailyCount: number;
+    /**
+     * Count of Google Calendar events folded into the prompt. 0 when
+     * the user hasn't connected Google Calendar (or the fetch
+     * gracefully degraded).
+     */
+    calendarEventCount: number;
+  };
 };
 
 function isStringArray(v: unknown): v is string[] {
@@ -43,6 +51,11 @@ export function isWeeklyAnalysisResponse(v: unknown): v is WeeklyAnalysisRespons
   if (typeof v !== 'object' || v === null) return false;
   const o = v as Record<string, unknown>;
   if (!isWeeklyAnalysis(o.analysis)) return false;
-  const source = o.source as { dailyCount?: unknown } | undefined;
-  return !!source && typeof source.dailyCount === 'number';
+  const source = o.source as
+    | { dailyCount?: unknown; calendarEventCount?: unknown }
+    | undefined;
+  if (!source) return false;
+  if (typeof source.dailyCount !== 'number') return false;
+  if (typeof source.calendarEventCount !== 'number') return false;
+  return true;
 }
