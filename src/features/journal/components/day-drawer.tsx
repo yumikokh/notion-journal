@@ -20,6 +20,7 @@ import { MarkdownView } from '@/components/markdown-view';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Spacing } from '@/constants/theme';
+import { DayEventsSection } from '@/features/calendar/components/day-events-section';
 import { FeelingPicker } from '@/features/journal/components/feeling-picker';
 import { HabitChecks } from '@/features/journal/components/habit-checks';
 import {
@@ -468,6 +469,9 @@ function DayDrawerContent({
                   </ThemedText>
                 </Pressable>
               </View>
+
+              {/* 予定 — Google Calendar; renders nothing when disconnected */}
+              <DayEventsSection date={date} />
 
               {/* 本文 — only section with header + view/edit toggle */}
               <View style={styles.bodySection}>
