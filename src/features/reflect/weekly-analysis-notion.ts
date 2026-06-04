@@ -22,13 +22,23 @@ function bullets(items: string[]): string {
 
 /**
  * Render the analysis as page-body markdown, mirroring the on-screen
- * sections (サマリー / 気付き・パターン / KPT / 来週のフォーカス).
+ * sections (サマリー / 気付き・パターン / KPT / 来週のフォーカス). The summary
+ * subtitle mirrors AnalysisResult: it notes the calendar event count too when
+ * the analysis drew on calendar data.
  */
-export function weeklyAnalysisToMarkdown(analysis: WeeklyAnalysis, dailyCount: number): string {
+export function weeklyAnalysisToMarkdown(
+  analysis: WeeklyAnalysis,
+  dailyCount: number,
+  calendarEventCount: number,
+): string {
   const { summary, patterns, kpt, nextFocus } = analysis;
+  const subtitle =
+    calendarEventCount > 0
+      ? `${dailyCount}日分のジャーナル + 予定 ${calendarEventCount} 件から`
+      : `${dailyCount}日分のジャーナルから`;
   return [
     '## サマリー',
-    `_${dailyCount}日分のジャーナルから_`,
+    `_${subtitle}_`,
     '',
     summary,
     '',

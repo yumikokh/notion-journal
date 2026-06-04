@@ -64,6 +64,7 @@ export function ReflectScreen() {
     saveMutation.mutate({
       analysis: query.data.analysis,
       dailyCount: query.data.source.dailyCount,
+      calendarEventCount: query.data.source.calendarEventCount,
     });
   };
 
@@ -141,6 +142,7 @@ export function ReflectScreen() {
             <AnalysisResult
               analysis={query.data.analysis}
               dailyCount={query.data.source.dailyCount}
+              calendarEventCount={query.data.source.calendarEventCount}
             />
             <View style={styles.actions}>
               <Pressable

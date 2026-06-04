@@ -14,7 +14,7 @@ import {
   type WeeklyReflection,
 } from './weekly-reflection';
 
-type SaveArgs = { analysis: WeeklyAnalysis; dailyCount: number };
+type SaveArgs = { analysis: WeeklyAnalysis; dailyCount: number; calendarEventCount: number };
 
 /**
  * Persist an AI weekly analysis to the Notion Reflection DB (issue #16).
@@ -28,7 +28,11 @@ type SaveArgs = { analysis: WeeklyAnalysis; dailyCount: number };
 export function useSaveWeeklyAnalysis(range: WeekRange) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ analysis, dailyCount }: SaveArgs): Promise<WeeklyReflection> => {
+    mutationFn: async ({
+      analysis,
+      dailyCount,
+      calendarEventCount,
+    }: SaveArgs): Promise<WeeklyReflection> => {
       const { page } = await invokeNotionWeeklyGet({
         weekStart: range.start,
         weekEnd: range.end,
@@ -42,7 +46,7 @@ export function useSaveWeeklyAnalysis(range: WeekRange) {
         date: range.end, // anchor a new page on the week's Sunday
         name: formatWeekLabel(range),
         properties,
-        bodyMarkdown: weeklyAnalysisToMarkdown(analysis, dailyCount),
+        bodyMarkdown: weeklyAnalysisToMarkdown(analysis, dailyCount, calendarEventCount),
       });
 
       return { ...next, notionPageId, date: existing.date ?? range.end };

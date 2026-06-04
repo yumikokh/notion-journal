@@ -19,14 +19,17 @@ iOS 単体・個人利用ツールとして開発。Web対応・課金（Revenue
 
 - [ ] Notion OAuth 認証フロー（Supabase Edge Function 経由）
 - [ ] DB選択 + スキーママッピングUI
-- [ ] Today画面: Feelingピッカー
-- [ ] Today画面: Good / Highlight / Struggle / Next の4カード入力
+- [ ] Today画面: Feelingピッカー（その日の総合気分・プロパティ）
+- [ ] Today画面: Moment 投稿（本文 + 瞬間の Feeling）→ Daily 本文に callout を append
+- [ ] Today画面: Moment タイムライン表示（当日の投稿を時系列で）
 - [ ] Today画面: 習慣チェックボックス
-- [ ] 自由記述エディタ
-- [ ] Notion書き込み Edge Function（ページ作成・更新）
+- [ ] 自由記述エディタ（充電/放電などの吐き出しを本文に）
+- [ ] `appendMoment` Edge Function（Daily ページ find-or-create + blocks.children.append）
+- [ ] `updateDaily` Edge Function（Feeling / 習慣 / Sleep プロパティ更新）
+- [ ] 本文ブロックパーサ（callout → Moment 型）
 - [ ] TanStack Query mutation + 楽観的更新
 
-ゲート条件: アプリで入力 → Notion に反映される
+ゲート条件: アプリで Moment を投稿 → Notion の当日ページ本文に反映される
 
 ## Phase 2: 閲覧 + AI週次分析 + カレンダー連携 + 通知（2-3週間）
 
@@ -58,11 +61,13 @@ iOS 単体・個人利用ツールとして開発。Web対応・課金（Revenue
 
 ---
 
-## Phase 4: ウィークリー + Insights（任意・後回し可）
+## Phase 4: ウィークリー + Insights + コンテキストソース拡張（任意・後回し可）
 
-- [ ] ウィークリージャーナル連携（充電/放電ログ）
+- [ ] ウィークリージャーナル連携（分析的ふりかえり。充電/放電は Daily 本文へ移動済み）
 - [ ] KPT入力・連携
 - [ ] Insights画面: Feeling推移 / 習慣達成率 / ストリーク
+- [ ] HealthKit 連携: 睡眠 / 歩数 / 運動 / 心拍などを取得し、Today 表示と週次AI分析の入力に統合
+- [ ] 当日撮影写真の取り込み: PhotoKit メタデータ取得、Today で振り返り素材として表示、AI 週次分析の入力ソース化
 
 ## Phase 5: 拡張（任意）
 

@@ -26,7 +26,7 @@ const empty: WeeklyAnalysis = {
 
 describe('weeklyAnalysisToMarkdown', () => {
   it('renders every on-screen section with headings and content', () => {
-    const md = weeklyAnalysisToMarkdown(analysis, 5);
+    const md = weeklyAnalysisToMarkdown(analysis, 5, 0);
     expect(md).toContain('## サマリー');
     expect(md).toContain('5日分のジャーナルから');
     expect(md).toContain('集中できた一週間。');
@@ -43,9 +43,15 @@ describe('weeklyAnalysisToMarkdown', () => {
   });
 
   it('falls back to （該当なし） for each empty list section', () => {
-    const md = weeklyAnalysisToMarkdown(empty, 0);
+    const md = weeklyAnalysisToMarkdown(empty, 0, 0);
     // patterns + keep + problem + try + nextFocus = 5 list sections
     expect(md.match(/（該当なし）/g)?.length).toBe(5);
+  });
+
+  it('notes the calendar event count in the subtitle when > 0', () => {
+    expect(weeklyAnalysisToMarkdown(analysis, 5, 3)).toContain(
+      '5日分のジャーナル + 予定 3 件から',
+    );
   });
 });
 

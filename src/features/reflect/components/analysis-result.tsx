@@ -9,12 +9,17 @@ import type { WeeklyAnalysis } from '../weekly-analysis';
 type Props = {
   analysis: WeeklyAnalysis;
   dailyCount: number;
+  calendarEventCount: number;
 };
 
-export function AnalysisResult({ analysis, dailyCount }: Props) {
+export function AnalysisResult({ analysis, dailyCount, calendarEventCount }: Props) {
+  const subtitle =
+    calendarEventCount > 0
+      ? `${dailyCount}日分のジャーナル + 予定 ${calendarEventCount} 件から`
+      : `${dailyCount}日分のジャーナルから`;
   return (
     <View style={styles.root}>
-      <Section title="サマリー" subtitle={`${dailyCount}日分のジャーナルから`}>
+      <Section title="サマリー" subtitle={subtitle}>
         <ThemedText>{analysis.summary}</ThemedText>
       </Section>
 
