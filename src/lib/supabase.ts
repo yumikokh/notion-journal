@@ -126,3 +126,41 @@ export function invokeNotionMonthGet(payload: { yearMonth: string }) {
 export function invokeAiWeeklyAnalyze(payload: { weekStart: string; weekEnd: string }) {
   return invoke<unknown>('ai-weekly-analyze', payload);
 }
+
+export type GoogleOAuthStatus =
+  | { connected: false }
+  | { connected: true; scope: string; connectedAt: string };
+
+export function invokeGoogleOAuthStatus() {
+  return invoke<GoogleOAuthStatus>('google-oauth-status', {});
+}
+
+export function invokeGoogleOAuthExchange(payload: {
+  code: string;
+  codeVerifier: string;
+  redirectUri: string;
+}) {
+  return invoke<{ ok: true; scope: string }>('google-oauth-exchange', payload);
+}
+
+export function invokeGoogleOAuthDisconnect() {
+  return invoke<{ ok: true }>('google-oauth-disconnect', {});
+}
+
+export type CalendarEvent = {
+  start: string;
+  end: string;
+  summary: string;
+  description?: string;
+  calendarId: string;
+};
+
+export function invokeGoogleCalendarList(payload: {
+  /** ISO 8601 inclusive lower bound */
+  timeMin: string;
+  /** ISO 8601 exclusive upper bound */
+  timeMax: string;
+  calendarId?: string;
+}) {
+  return invoke<{ events: CalendarEvent[] }>('google-calendar-list', payload);
+}
