@@ -1,6 +1,6 @@
 import {
-  Activity,
   BookOpen,
+  Dumbbell,
   Globe,
   Image as ImageIcon,
   Palette,
@@ -25,7 +25,7 @@ const KNOWN_HABIT_ICONS: Record<string, LucideIcon> = {
   book: BookOpen,
   design: Palette,
   english: Globe,
-  exercise: Activity,
+  exercise: Dumbbell,
 };
 
 const FALLBACK_HABIT_ICON: LucideIcon = SquareCheck;
