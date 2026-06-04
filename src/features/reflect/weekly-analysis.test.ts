@@ -63,11 +63,20 @@ describe('isWeeklyAnalysis', () => {
 });
 
 describe('isWeeklyAnalysisResponse', () => {
-  it('accepts a response with analysis + source', () => {
+  it('accepts a response with analysis + source (journal-only week)', () => {
     expect(
       isWeeklyAnalysisResponse({
         analysis: validAnalysis,
-        source: { dailyCount: 5 },
+        source: { dailyCount: 5, calendarEventCount: 0 },
+      }),
+    ).toBe(true);
+  });
+
+  it('accepts a response with calendar events folded in', () => {
+    expect(
+      isWeeklyAnalysisResponse({
+        analysis: validAnalysis,
+        source: { dailyCount: 5, calendarEventCount: 12 },
       }),
     ).toBe(true);
   });
@@ -75,7 +84,25 @@ describe('isWeeklyAnalysisResponse', () => {
   it('rejects when source.dailyCount is missing or wrong type', () => {
     expect(isWeeklyAnalysisResponse({ analysis: validAnalysis })).toBe(false);
     expect(
-      isWeeklyAnalysisResponse({ analysis: validAnalysis, source: { dailyCount: '5' } }),
+      isWeeklyAnalysisResponse({
+        analysis: validAnalysis,
+        source: { dailyCount: '5', calendarEventCount: 0 },
+      }),
+    ).toBe(false);
+  });
+
+  it('rejects when source.calendarEventCount is missing or wrong type', () => {
+    expect(
+      isWeeklyAnalysisResponse({
+        analysis: validAnalysis,
+        source: { dailyCount: 5 },
+      }),
+    ).toBe(false);
+    expect(
+      isWeeklyAnalysisResponse({
+        analysis: validAnalysis,
+        source: { dailyCount: 5, calendarEventCount: null },
+      }),
     ).toBe(false);
   });
 
@@ -83,7 +110,7 @@ describe('isWeeklyAnalysisResponse', () => {
     expect(
       isWeeklyAnalysisResponse({
         analysis: { ...validAnalysis, summary: '' },
-        source: { dailyCount: 0 },
+        source: { dailyCount: 0, calendarEventCount: 0 },
       }),
     ).toBe(false);
   });
