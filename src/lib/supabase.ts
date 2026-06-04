@@ -126,3 +126,25 @@ export function invokeNotionMonthGet(payload: { yearMonth: string }) {
 export function invokeAiWeeklyAnalyze(payload: { weekStart: string; weekEnd: string }) {
   return invoke<unknown>('ai-weekly-analyze', payload);
 }
+
+/**
+ * Read the weekly reflection (Notion "↩️ Reflection DB", Type=Weekly) for a
+ * Monday→Sunday range. Returns the raw Notion page (or null); the caller maps
+ * it via `notionPageToWeeklyReflection`.
+ */
+export function invokeNotionWeeklyGet(payload: { weekStart: string; weekEnd: string }) {
+  return invoke<{ page: NotionPage | null }>('notion-weekly-get', payload);
+}
+
+/**
+ * Create or update a weekly reflection. On create the server sets
+ * Name/Date/Type="Weekly"; on update only `properties` are touched.
+ */
+export function invokeNotionWeeklySave(payload: {
+  notionPageId: string | null;
+  date: string;
+  name?: string;
+  properties: Record<string, unknown>;
+}) {
+  return invoke<{ notionPageId: string }>('notion-weekly-save', payload);
+}

@@ -76,7 +76,12 @@ type JournalEntry = {
 };
 ```
 
-`WeeklyJournal`（充電/放電ログ）と `Kpt`（Keep/Problem/Try/Knowledge）も同様に型として定義する。
+`WeeklyReflection`（週次の分析的ふりかえり）も同様に TypeScript の型として定義する。
+Notion の「↩️ Reflection DB」(`Type` select で Weekly/Monthly を切替) に対応し、
+`よかったこと`(good) / `よくなかったこと`(problem) / `トライできること`(tryNext) /
+`次の具体目標`(nextGoal) の4つの rich_text と `Date` を持つ。
+充電/放電ログは Daily 本文（Moment / 自由記述）の役割なので、この型には含めない。
+（型・マッピングの実体は `src/features/reflect/weekly-reflection.ts`）
 
 ## 書き込みフロー
 
