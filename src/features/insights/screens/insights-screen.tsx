@@ -64,6 +64,7 @@ export function InsightsScreen() {
   return (
     <ScreenContainer>
       <ScrollView
+        showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scroll}
         refreshControl={<RefreshControl refreshing={isFetching} onRefresh={refetch} />}>
         <View style={styles.topRow}>
