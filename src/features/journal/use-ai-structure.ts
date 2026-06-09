@@ -7,6 +7,7 @@ import { isValidAIOutput } from './ai-prompt';
 type AiStructureInput = {
   bodyText: string;
   systemPrompt?: string; // optional user override from Settings
+  calendarContext?: string; // that day's events, pre-formatted as markdown
 };
 
 type AiStructureResult = {
@@ -19,8 +20,8 @@ type AiStructureResult = {
  */
 export function useAiStructure() {
   return useMutation<AiStructureResult, Error, AiStructureInput>({
-    mutationFn: async ({ bodyText, systemPrompt }) => {
-      const result = await invokeAiStructure({ bodyText, systemPrompt });
+    mutationFn: async ({ bodyText, systemPrompt, calendarContext }) => {
+      const result = await invokeAiStructure({ bodyText, systemPrompt, calendarContext });
       if (!isValidAIOutput(result)) {
         throw new Error('AI returned an invalid output shape');
       }
