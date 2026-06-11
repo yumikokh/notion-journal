@@ -54,6 +54,8 @@ export function SettingsScreen() {
       <ScrollView
         contentContainerStyle={styles.content}
         keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="interactive"
+        automaticallyAdjustKeyboardInsets
         showsVerticalScrollIndicator={false}>
         <ThemedText type="subtitle">設定</ThemedText>
 
