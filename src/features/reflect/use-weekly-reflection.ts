@@ -22,11 +22,11 @@ export function useWeeklyReflection(range: WeekRange, options: UseWeeklyReflecti
   return useQuery<WeeklyReflection>({
     queryKey: ['weekly-reflection', range.start, range.end],
     queryFn: async () => {
-      const { page } = await invokeNotionWeeklyGet({
+      const { page, bodyMarkdown } = await invokeNotionWeeklyGet({
         weekStart: range.start,
         weekEnd: range.end,
       });
-      return notionPageToWeeklyReflection(page, range.start, range.end);
+      return notionPageToWeeklyReflection(page, range.start, range.end, bodyMarkdown);
     },
     enabled: options.enabled ?? true,
   });
