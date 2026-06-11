@@ -5,6 +5,7 @@ import type { NotionPage } from '@/features/notion/types';
 import {
   REFLECTION_PROPERTY_NAMES,
   emptyWeeklyReflection,
+  hasSavedReflection,
   notionPageToWeeklyReflection,
   reflectionToNotionUpdate,
   type WeeklyReflection,
@@ -102,5 +103,30 @@ describe('reflectionToNotionUpdate', () => {
     expect(properties).not.toHaveProperty(P.name);
     expect(properties).not.toHaveProperty(P.date);
     expect(properties).not.toHaveProperty(P.type);
+  });
+});
+
+describe('hasSavedReflection', () => {
+  const base: WeeklyReflection = {
+    notionPageId: 'page-week-1',
+    weekStart: '2026-05-26',
+    weekEnd: '2026-06-01',
+    date: '2026-06-01',
+    good: '',
+    problem: '',
+    tryNext: '',
+    nextGoal: '',
+  };
+
+  it('is false when no Notion page exists', () => {
+    expect(hasSavedReflection(emptyWeeklyReflection('2026-05-26', '2026-06-01'))).toBe(false);
+  });
+
+  it('is false when a page exists but every field is empty', () => {
+    expect(hasSavedReflection(base)).toBe(false);
+  });
+
+  it('is true when a page exists with at least one non-empty field', () => {
+    expect(hasSavedReflection({ ...base, tryNext: '22時就寝' })).toBe(true);
   });
 });

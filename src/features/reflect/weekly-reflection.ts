@@ -119,3 +119,15 @@ export function reflectionToNotionUpdate(r: WeeklyReflection): NotionReflectionU
     },
   };
 }
+
+/**
+ * True when a Weekly page exists in Notion for this week AND it carries at
+ * least one non-empty reflection field. Used by the Reflect screen to show
+ * the saved reflection (and skip a wasted re-analysis) when reopening a week.
+ */
+export function hasSavedReflection(r: WeeklyReflection): boolean {
+  return (
+    r.notionPageId !== null &&
+    (r.good !== '' || r.problem !== '' || r.tryNext !== '' || r.nextGoal !== '')
+  );
+}
