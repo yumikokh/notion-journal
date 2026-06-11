@@ -80,6 +80,19 @@ export function ReflectScreen() {
     });
   };
 
+  const handlePullRefresh = () => {
+    // Pull-to-refresh re-syncs the saved reflection from Notion and returns to
+    // the saved view, dropping any unsaved AI analysis for this week. It must
+    // NOT trigger a paid re-analysis — that stays behind the explicit buttons.
+    setAnalyzedWeeks((prev) => {
+      if (!prev.has(range.start)) return prev;
+      const next = new Set(prev);
+      next.delete(range.start);
+      return next;
+    });
+    reflectionQuery.refetch();
+  };
+
   const canGoNext = !isSameWeek(range, currentWeek);
 
   if (!envOk) {
@@ -100,15 +113,13 @@ export function ReflectScreen() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scroll}
         refreshControl={
-          // Pull-to-refresh re-reads the saved reflection from Notion (cheap).
-          // It must NOT trigger the AI analysis — that is a paid Claude call
-          // and stays behind the explicit「再生成」/「もう一度分析する」buttons.
-          !wasAnalyzed ? (
-            <RefreshControl
-              refreshing={reflectionQuery.isFetching}
-              onRefresh={() => reflectionQuery.refetch()}
-            />
-          ) : undefined
+          // Pull-to-refresh re-reads the saved reflection from Notion (cheap)
+          // and drops any unsaved AI analysis. It must NOT trigger the paid
+          // Claude analysis — that stays behind the explicit buttons.
+          <RefreshControl
+            refreshing={reflectionQuery.isFetching}
+            onRefresh={handlePullRefresh}
+          />
         }>
         <WeekPicker
           range={range}
