@@ -1,6 +1,5 @@
 import { Linking, Pressable, StyleSheet, View } from 'react-native';
 
-import { MarkdownView } from '@/components/markdown-view';
 import { ThemedText } from '@/components/themed-text';
 import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
@@ -10,12 +9,9 @@ import { REFLECTION_PROPERTY_NAMES, type WeeklyReflection } from '../weekly-refl
 type Props = { reflection: WeeklyReflection };
 
 /**
- * Read-only view of a weekly reflection already saved to Notion.
- *
- * The page body markdown (the full saved analysis) is the source of truth, so
- * we render it directly — this reflects edits made in Notion and shows the
- * summary + patterns, not just the KPT. Older pages without a body fall back
- * to the four KPT/focus properties.
+ * Read-only view of a weekly reflection already saved to Notion. Shows the
+ * four KPT/focus fields (the page properties); the summary + patterns live in
+ * the Notion page body, so a "Notion で開く" link surfaces the full record.
  */
 const FIELDS = [
   { key: 'good', label: REFLECTION_PROPERTY_NAMES.good, tone: '#22a06b' },
@@ -29,39 +25,32 @@ export function SavedReflection({ reflection }: Props) {
   const notionUrl = reflection.notionPageId
     ? `https://www.notion.so/${reflection.notionPageId.replace(/-/g, '')}`
     : null;
-  const body = reflection.bodyMarkdown.trim();
 
   return (
     <View style={styles.root}>
       <ThemedText themeColor="textSecondary" type="small">
-        Notion に保存済みの週次ふりかえりです。
+        この週は Notion に保存済みです。サマリー・気付きは Notion 本文に入っています。
       </ThemedText>
 
-      {body ? (
-        <MarkdownView>{reflection.bodyMarkdown}</MarkdownView>
-      ) : (
-        // Fallback for pages saved before the body was written: show the four
-        // KPT/focus properties.
-        FIELDS.map(({ key, label, tone }) => {
-          const value = reflection[key];
-          if (!value) return null;
-          const items = value.split('\n').filter((s) => s.length > 0);
-          return (
-            <View key={key} style={styles.group}>
-              <View style={[styles.label, { backgroundColor: tone }]}>
-                <ThemedText style={styles.labelText}>{label}</ThemedText>
-              </View>
-              <View style={styles.items}>
-                {items.map((item, i) => (
-                  <View key={i} style={[styles.card, { backgroundColor: theme.backgroundElement }]}>
-                    <ThemedText selectable>{item}</ThemedText>
-                  </View>
-                ))}
-              </View>
+      {FIELDS.map(({ key, label, tone }) => {
+        const value = reflection[key];
+        if (!value) return null;
+        const items = value.split('\n').filter((s) => s.length > 0);
+        return (
+          <View key={key} style={styles.group}>
+            <View style={[styles.label, { backgroundColor: tone }]}>
+              <ThemedText style={styles.labelText}>{label}</ThemedText>
             </View>
-          );
-        })
-      )}
+            <View style={styles.items}>
+              {items.map((item, i) => (
+                <View key={i} style={[styles.card, { backgroundColor: theme.backgroundElement }]}>
+                  <ThemedText selectable>{item}</ThemedText>
+                </View>
+              ))}
+            </View>
+          </View>
+        );
+      })}
 
       {notionUrl ? (
         <Pressable

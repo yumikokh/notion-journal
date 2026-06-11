@@ -138,7 +138,7 @@ export function invokeAiWeeklyAnalyze(payload: { weekStart: string; weekEnd: str
  * it via `notionPageToWeeklyReflection`.
  */
 export function invokeNotionWeeklyGet(payload: { weekStart: string; weekEnd: string }) {
-  return invoke<{ page: NotionPage | null; bodyMarkdown: string }>('notion-weekly-get', payload);
+  return invoke<{ page: NotionPage | null }>('notion-weekly-get', payload);
 }
 
 /**

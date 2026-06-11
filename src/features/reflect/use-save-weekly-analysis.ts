@@ -33,26 +33,23 @@ export function useSaveWeeklyAnalysis(range: WeekRange) {
       dailyCount,
       calendarEventCount,
     }: SaveArgs): Promise<WeeklyReflection> => {
-      const { page, bodyMarkdown: existingBody } = await invokeNotionWeeklyGet({
+      const { page } = await invokeNotionWeeklyGet({
         weekStart: range.start,
         weekEnd: range.end,
       });
-      const existing = notionPageToWeeklyReflection(page, range.start, range.end, existingBody);
+      const existing = notionPageToWeeklyReflection(page, range.start, range.end);
       const next: WeeklyReflection = { ...existing, ...weeklyAnalysisToReflectionFields(analysis) };
       const { properties } = reflectionToNotionUpdate(next);
-      const bodyMarkdown = weeklyAnalysisToMarkdown(analysis, dailyCount, calendarEventCount);
 
       const { notionPageId } = await invokeNotionWeeklySave({
         notionPageId: existing.notionPageId,
         date: range.end, // anchor a new page on the week's Sunday
         name: formatWeekLabel(range),
         properties,
-        bodyMarkdown,
+        bodyMarkdown: weeklyAnalysisToMarkdown(analysis, dailyCount, calendarEventCount),
       });
 
-      // Reflect the just-saved body in the returned reflection so the cache
-      // (and the saved-reflection view) shows it without a round trip.
-      return { ...next, notionPageId, date: existing.date ?? range.end, bodyMarkdown };
+      return { ...next, notionPageId, date: existing.date ?? range.end };
     },
     onSuccess: (saved) => {
       // Keep the reflection cache in sync so a future read paints the saved

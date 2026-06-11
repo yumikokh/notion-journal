@@ -1,9 +1,5 @@
 // GET a weekly reflection from the Notion "↩️ Reflection DB" for a week.
-// Returns: { page: NotionPage | null; bodyMarkdown: string }
-//
-// `bodyMarkdown` is the page body (the full saved AI analysis, #16). It is the
-// source of truth the app renders, so edits made directly in Notion show up in
-// the app — unlike the four rich_text properties, which are only a summary.
+// Returns: { page: NotionPage | null }
 //
 // The Reflection DB (a data source) holds KPT-style retrospectives shared
 // by Weekly and Monthly entries via its `Type` select:
@@ -27,8 +23,6 @@ const REFLECTION_DATA_SOURCE_ID =
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 type QueryResponse = { results?: { id: string }[] };
-
-type WeeklyPage = { id: string } | null;
 
 /** Day after `yyyyMmDd` (UTC), used as an exclusive upper Date bound. */
 function nextDay(yyyyMmDd: string): string {
@@ -67,15 +61,8 @@ Deno.serve(async (req) => {
         { property: 'Date', date: { before: nextDay(body.weekEnd) } },
       ],
     });
-    const page = (query.results?.[0] ?? null) as WeeklyPage;
-    // Read the page body too (the full saved analysis), so Notion edits to it
-    // are reflected in the app. The properties alone can drift from the body.
-    let bodyMarkdown = '';
-    if (page) {
-      const md = await notion.getPageMarkdown(page.id);
-      bodyMarkdown = md.markdown ?? '';
-    }
-    return json({ page, bodyMarkdown });
+    const page = query.results?.[0] ?? null;
+    return json({ page });
   } catch (err) {
     if (err instanceof NotionError) {
       const status = err.status === 401 || err.status === 404 ? err.status : 502;

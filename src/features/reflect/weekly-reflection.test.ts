@@ -83,7 +83,6 @@ describe('reflectionToNotionUpdate', () => {
     problem: 'だめだった',
     tryNext: 'ためすこと',
     nextGoal: '次の目標',
-    bodyMarkdown: '## サマリー\n本文',
   };
 
   it('builds rich_text payloads keyed by the Japanese property names', () => {
@@ -117,35 +116,17 @@ describe('hasSavedReflection', () => {
     problem: '',
     tryNext: '',
     nextGoal: '',
-    bodyMarkdown: '',
   };
 
   it('is false when no Notion page exists', () => {
     expect(hasSavedReflection(emptyWeeklyReflection('2026-05-26', '2026-06-01'))).toBe(false);
   });
 
-  it('is false when a page exists but every field and the body are empty', () => {
+  it('is false when a page exists but every field is empty', () => {
     expect(hasSavedReflection(base)).toBe(false);
   });
 
   it('is true when a page exists with at least one non-empty field', () => {
     expect(hasSavedReflection({ ...base, tryNext: '22時就寝' })).toBe(true);
-  });
-
-  it('is true when only the page body is present', () => {
-    expect(hasSavedReflection({ ...base, bodyMarkdown: '## サマリー\n…' })).toBe(true);
-  });
-});
-
-describe('notionPageToWeeklyReflection (body)', () => {
-  it('passes the page body markdown through', () => {
-    const page: NotionPage = { id: 'p', properties: {} };
-    const r = notionPageToWeeklyReflection(page, '2026-05-26', '2026-06-01', '## サマリー\n本文');
-    expect(r.bodyMarkdown).toBe('## サマリー\n本文');
-  });
-
-  it('defaults bodyMarkdown to empty when omitted', () => {
-    const page: NotionPage = { id: 'p', properties: {} };
-    expect(notionPageToWeeklyReflection(page, '2026-05-26', '2026-06-01').bodyMarkdown).toBe('');
   });
 });

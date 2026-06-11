@@ -45,12 +45,6 @@ export type WeeklyReflection = {
   problem: string; // よくなかったこと
   tryNext: string; // トライできること
   nextGoal: string; // 次の具体目標
-  /**
-   * The Notion page body as markdown (the full saved AI analysis). This is the
-   * source of truth the app renders, so edits made directly in Notion show up.
-   * Empty when no page exists or the page has no body.
-   */
-  bodyMarkdown: string;
 };
 
 function richTextToString(rt: NotionRichText[] | undefined): string {
@@ -73,7 +67,6 @@ export function emptyWeeklyReflection(weekStart: string, weekEnd: string): Weekl
     problem: '',
     tryNext: '',
     nextGoal: '',
-    bodyMarkdown: '',
   };
 }
 
@@ -85,7 +78,6 @@ export function notionPageToWeeklyReflection(
   page: NotionPage | null,
   weekStart: string,
   weekEnd: string,
-  bodyMarkdown = '',
 ): WeeklyReflection {
   if (!page) return emptyWeeklyReflection(weekStart, weekEnd);
 
@@ -106,7 +98,6 @@ export function notionPageToWeeklyReflection(
     problem: readText(REFLECTION_PROPERTY_NAMES.problem),
     tryNext: readText(REFLECTION_PROPERTY_NAMES.tryNext),
     nextGoal: readText(REFLECTION_PROPERTY_NAMES.nextGoal),
-    bodyMarkdown,
   };
 }
 
@@ -137,10 +128,6 @@ export function reflectionToNotionUpdate(r: WeeklyReflection): NotionReflectionU
 export function hasSavedReflection(r: WeeklyReflection): boolean {
   return (
     r.notionPageId !== null &&
-    (r.bodyMarkdown.trim() !== '' ||
-      r.good !== '' ||
-      r.problem !== '' ||
-      r.tryNext !== '' ||
-      r.nextGoal !== '')
+    (r.good !== '' || r.problem !== '' || r.tryNext !== '' || r.nextGoal !== '')
   );
 }
