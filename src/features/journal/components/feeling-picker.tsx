@@ -2,7 +2,7 @@ import { Pressable, StyleSheet, View, useColorScheme } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
 import { Spacing } from '@/constants/theme';
-import { FEELINGS, type Feeling } from '@/features/journal/draft';
+import { FEELINGS, FEELING_NOTION_COLORS, type Feeling } from '@/features/journal/draft';
 import { notionChipColor } from '@/features/notion/colors';
 import { useTheme } from '@/hooks/use-theme';
 import type { NotionSelectColor } from '@/lib/supabase';
@@ -25,7 +25,10 @@ export function FeelingPicker({ value, onChange, colorMap }: FeelingPickerProps)
     <View style={styles.row}>
       {FEELINGS.map((feeling) => {
         const selected = value === feeling;
-        const chip = notionChipColor(colorMap?.[feeling] ?? null, scheme);
+        // Prefer the color learned from saved entries, but fall back to the
+        // feeling's known Notion color so every option tints even before it
+        // has ever been saved.
+        const chip = notionChipColor(colorMap?.[feeling] ?? FEELING_NOTION_COLORS[feeling], scheme);
         return (
           <Pressable
             key={feeling}

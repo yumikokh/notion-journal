@@ -15,9 +15,28 @@
  */
 
 import type { TodayEntrySnapshot } from '@/features/notion/types';
+import type { NotionSelectColor } from '@/lib/supabase';
 
 export const FEELINGS = ['(^^)', '(˙-˙)', '(- -)', '(TT)', '(`A´)'] as const;
 export type Feeling = (typeof FEELINGS)[number];
+
+/**
+ * Notion select color for each Feeling option, mirroring the colors set on
+ * the `Feeling` property in the 2026/Daily database.
+ *
+ * The FeelingPicker normally learns a feeling's color from already-saved
+ * entries, but a feeling that has never been used in the loaded month has no
+ * learned color and would fall back to the gray `default` palette — so it
+ * never tints when tapped. This static map is the fallback so every option
+ * shows its Notion color even before it's ever been saved.
+ */
+export const FEELING_NOTION_COLORS: Record<Feeling, NotionSelectColor> = {
+  '(^^)': 'pink',
+  '(˙-˙)': 'yellow',
+  '(- -)': 'gray',
+  '(TT)': 'blue',
+  '(`A´)': 'brown',
+};
 
 /**
  * Habits ordered as they appear in the Notion Daily DB.
