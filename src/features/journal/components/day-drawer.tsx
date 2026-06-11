@@ -20,7 +20,9 @@ import { MarkdownView } from '@/components/markdown-view';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Spacing } from '@/constants/theme';
+import { buildDayCalendarContext } from '@/features/calendar/calendar-context';
 import { DayEventsSection } from '@/features/calendar/components/day-events-section';
+import { useDayEvents } from '@/features/calendar/use-day-events';
 import { FeelingPicker } from '@/features/journal/components/feeling-picker';
 import { HabitChecks } from '@/features/journal/components/habit-checks';
 import {
@@ -112,6 +114,10 @@ function DayDrawerContent({
   const uploadCover = useUploadCover();
   const removeCover = useRemoveCover();
   const ai = useAiStructure();
+  // Reuses the same cached query as <DayEventsSection> below — no extra
+  // fetch. Empty/undefined when Google Calendar isn't connected, in which
+  // case the AI call stays journal-only.
+  const dayEvents = useDayEvents(date);
 
   // Merge the calendar-derived color map with the color of THIS entry's
   // feeling — the latter is always fresh and may include a feeling that
@@ -212,8 +218,13 @@ function DayDrawerContent({
   const handleAi = async () => {
     if (!envOk || draft.freeText.trim().length === 0 || ai.isPending) return;
     const customPrompt = await loadCustomPrompt();
+    const calendarContext = buildDayCalendarContext(dayEvents.data ?? []);
     ai.mutate(
-      { bodyText: draft.freeText, systemPrompt: customPrompt ?? undefined },
+      {
+        bodyText: draft.freeText,
+        systemPrompt: customPrompt ?? undefined,
+        calendarContext: calendarContext || undefined,
+      },
       {
         onSuccess: (output) => dispatch({ type: 'apply-ai', diary: output.diary }),
       },
