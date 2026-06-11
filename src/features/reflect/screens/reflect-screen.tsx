@@ -100,8 +100,14 @@ export function ReflectScreen() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scroll}
         refreshControl={
-          wasAnalyzed && query.data ? (
-            <RefreshControl refreshing={query.isFetching} onRefresh={handleRegenerate} />
+          // Pull-to-refresh re-reads the saved reflection from Notion (cheap).
+          // It must NOT trigger the AI analysis — that is a paid Claude call
+          // and stays behind the explicit「再生成」/「もう一度分析する」buttons.
+          !wasAnalyzed ? (
+            <RefreshControl
+              refreshing={reflectionQuery.isFetching}
+              onRefresh={() => reflectionQuery.refetch()}
+            />
           ) : undefined
         }>
         <WeekPicker
