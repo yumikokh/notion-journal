@@ -9,6 +9,9 @@
       "ios": {
         "simulator": false
       },
+      "env": {
+        "APP_VARIANT": "development"
+      },
       "channel": "development"
     },
     "development-simulator": {
@@ -17,14 +20,23 @@
       "ios": {
         "simulator": true
       },
+      "env": {
+        "APP_VARIANT": "development"
+      },
       "channel": "development-simulator"
     },
     "preview": {
       "distribution": "internal",
+      "env": {
+        "APP_VARIANT": "preview"
+      },
       "channel": "preview"
     },
     "production": {
       "autoIncrement": true,
+      "env": {
+        "APP_VARIANT": "production"
+      },
       "channel": "production"
     }
   },

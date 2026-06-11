@@ -85,6 +85,7 @@ export function ReflectScreen() {
   return (
     <ScreenContainer>
       <ScrollView
+        showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scroll}
         refreshControl={
           wasAnalyzed && query.data ? (

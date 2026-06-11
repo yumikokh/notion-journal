@@ -62,7 +62,12 @@ export function invokeNotionTodaySave(payload: {
   return invoke<{ notionPageId: string }>('notion-today-save', payload);
 }
 
-export function invokeAiStructure(payload: { bodyText: string; systemPrompt?: string }) {
+export function invokeAiStructure(payload: {
+  bodyText: string;
+  systemPrompt?: string;
+  /** That day's calendar events, pre-formatted as a markdown list. */
+  calendarContext?: string;
+}) {
   return invoke<{ diary: unknown }>('ai-structure', payload);
 }
 
