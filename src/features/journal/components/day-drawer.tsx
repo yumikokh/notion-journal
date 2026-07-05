@@ -1,5 +1,6 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { Image as CoverImage } from 'expo-image';
+import { SaveFormat, manipulateAsync } from 'expo-image-manipulator';
 import * as ImagePicker from 'expo-image-picker';
 import { Sparkles, Trash2 } from 'lucide-react-native';
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
@@ -34,6 +35,11 @@ import {
   type Feeling,
   type UserDraftAction,
 } from '@/features/journal/draft';
+import {
+  CoverCropModal,
+  type CropSource,
+} from '@/features/journal/components/cover-crop-modal';
+import type { CropRect } from '@/features/journal/cover-crop';
 import { coverImageSource } from '@/features/journal/cover-image';
 import { useAiStructure } from '@/features/journal/use-ai-structure';
 import { useRemoveCover } from '@/features/journal/use-remove-cover';
@@ -268,6 +274,14 @@ function DayDrawerContent({
     ]);
   };
 
+  // Photo picked from the library, awaiting its 16:9 crop. Keeps the
+  // original base64 around as a fallback for dev clients built before
+  // expo-image-manipulator was added.
+  const [cropSource, setCropSource] = useState<
+    (CropSource & { base64: string; mimeType: string; filename?: string }) | null
+  >(null);
+  const [cropping, setCropping] = useState(false);
+
   const pickPhoto = async () => {
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!perm.granted) return;
@@ -275,21 +289,56 @@ function DayDrawerContent({
       mediaTypes: 'images',
       quality: 0.7,
       base64: true,
-      // Native crop step after picking, so the user chooses which area of
-      // the photo becomes the cover (iOS pins the crop box to a square —
-      // a workable middle ground between the 16:9 drawer hero and the
-      // taller calendar cells, both of which contentFit="cover" from it).
-      allowsEditing: true,
+      // The 16:9 crop happens in our own CoverCropModal — the OS editor
+      // only offers a square crop box.
+      allowsEditing: false,
     });
     if (result.canceled || !result.assets[0]) return;
     const asset = result.assets[0];
     if (!asset.base64) return;
-    setPendingPhoto({
+    setCropSource({
       uri: asset.uri,
+      width: asset.width,
+      height: asset.height,
       base64: asset.base64,
       mimeType: asset.mimeType ?? 'image/jpeg',
       filename: asset.fileName ?? undefined,
     });
+  };
+
+  const handleCropConfirm = async (rect: CropRect) => {
+    if (!cropSource) return;
+    setCropping(true);
+    try {
+      const cropped = await manipulateAsync(cropSource.uri, [{ crop: rect }], {
+        compress: 0.8,
+        format: SaveFormat.JPEG,
+        base64: true,
+      });
+      if (!cropped.base64) throw new Error('crop produced no data');
+      setPendingPhoto({
+        uri: cropped.uri,
+        base64: cropped.base64,
+        mimeType: 'image/jpeg',
+        filename: cropSource.filename ?? 'cover.jpg',
+      });
+    } catch {
+      // Most likely an older dev client without the image-manipulator
+      // native module — fall back to the uncropped photo.
+      Alert.alert(
+        'トリミングできませんでした',
+        '選択した写真をそのままカバーに設定します。（開発ビルドの更新が必要かもしれません）',
+      );
+      setPendingPhoto({
+        uri: cropSource.uri,
+        base64: cropSource.base64,
+        mimeType: cropSource.mimeType,
+        filename: cropSource.filename,
+      });
+    } finally {
+      setCropping(false);
+      setCropSource(null);
+    }
   };
 
   const canAi = draft.freeText.trim().length > 0 && !ai.isPending && envOk;
@@ -636,6 +685,13 @@ function DayDrawerContent({
           </View>
         </View>
       </Modal>
+
+      <CoverCropModal
+        source={cropSource}
+        busy={cropping}
+        onCancel={() => setCropSource(null)}
+        onConfirm={handleCropConfirm}
+      />
     </ThemedView>
   );
 }
