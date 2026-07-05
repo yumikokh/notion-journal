@@ -1,3 +1,4 @@
+import { useQueryClient } from '@tanstack/react-query';
 import { Image as CoverImage } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import { Sparkles, Trash2 } from 'lucide-react-native';
@@ -41,7 +42,7 @@ import { useTodayEntry } from '@/features/journal/use-today-entry';
 import { useUploadCover } from '@/features/journal/use-upload-cover';
 import { emptySnapshot } from '@/features/notion/mapping';
 import type { TodayEntrySnapshot } from '@/features/notion/types';
-import type { NotionSelectColor } from '@/lib/supabase';
+import type { MonthEntry, NotionSelectColor } from '@/lib/supabase';
 import { loadCustomPrompt } from '@/features/settings/prompt-storage';
 import { useTheme } from '@/hooks/use-theme';
 import { formatJournalTitle } from '@/lib/date';
@@ -102,6 +103,7 @@ function DayDrawerContent({
 }) {
   const theme = useTheme();
   const envOk = isSupabaseEnvConfigured();
+  const queryClient = useQueryClient();
   // AI button uses the high-contrast "filled" treatment — black in light
   // mode, white in dark mode — matching the primary 保存 button so both
   // primary actions feel like first-class buttons.
@@ -287,7 +289,19 @@ function DayDrawerContent({
   };
 
   const canAi = draft.freeText.trim().length > 0 && !ai.isPending && envOk;
-  const displayCoverUri = pendingPhoto?.uri ?? entry.data?.coverUrl ?? null;
+  // While the per-day entry is still loading, seed the cover from the month
+  // query cache (the calendar/list already downloaded it) so opening a day
+  // shows its photo instantly instead of a blank slot that pops in later.
+  const cachedMonthCover = useMemo(() => {
+    if (entry.data) return null;
+    const monthEntries = queryClient.getQueryData<MonthEntry[]>([
+      'journal',
+      'month',
+      date.slice(0, 7),
+    ]);
+    return monthEntries?.find((e) => e.date === date)?.coverUrl ?? null;
+  }, [entry.data, queryClient, date]);
+  const displayCoverUri = pendingPhoto?.uri ?? entry.data?.coverUrl ?? cachedMonthCover;
   const pageIcon = entry.data?.icon;
 
   return (

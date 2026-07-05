@@ -3,6 +3,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { LayoutList, SlidersHorizontal } from 'lucide-react-native';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  Animated,
   FlatList,
   KeyboardAvoidingView,
   Modal,
@@ -109,7 +110,19 @@ export function CalendarScreen() {
   }, []);
 
   // View-mode sheet visibility (switch + customize the display modes).
+  // The backdrop fades while the sheet slides — animating the whole Modal
+  // with animationType="slide" would make the dim overlay rise with it.
   const [modeSheetOpen, setModeSheetOpen] = useState(false);
+  const [sheetAnim] = useState(() => new Animated.Value(0));
+  const openModeSheet = useCallback(() => {
+    setModeSheetOpen(true);
+    Animated.timing(sheetAnim, { toValue: 1, duration: 220, useNativeDriver: true }).start();
+  }, [sheetAnim]);
+  const closeModeSheet = useCallback(() => {
+    Animated.timing(sheetAnim, { toValue: 0, duration: 180, useNativeDriver: true }).start(() =>
+      setModeSheetOpen(false),
+    );
+  }, [sheetAnim]);
   const viewMode = activeViewMode(prefs);
 
   const [drawerDate, setDrawerDate] = useState<string | null>(null);
@@ -331,7 +344,7 @@ export function CalendarScreen() {
               <LayoutList size={16} color={theme.textSecondary} strokeWidth={1.8} />
             </Pressable>
             <Pressable
-              onPress={() => setModeSheetOpen(true)}
+              onPress={openModeSheet}
               accessibilityRole="button"
               accessibilityLabel="表示モードを切り替え"
               style={[styles.modePill, { backgroundColor: theme.backgroundElement }]}>
@@ -403,18 +416,31 @@ export function CalendarScreen() {
       <Modal
         visible={modeSheetOpen}
         transparent
-        animationType="slide"
-        onRequestClose={() => setModeSheetOpen(false)}>
+        animationType="none"
+        onRequestClose={closeModeSheet}>
         <KeyboardAvoidingView
           style={styles.sheetFlex}
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-          <Pressable
-            style={styles.sheetOverlay}
-            accessibilityLabel="表示モードの設定を閉じる"
-            onPress={() => setModeSheetOpen(false)}>
-            <Pressable
-              style={[styles.sheet, { backgroundColor: theme.background }]}
-              onPress={(e) => e.stopPropagation()}>
+          <View style={styles.sheetFlexEnd}>
+            <Animated.View style={[styles.sheetBackdrop, { opacity: sheetAnim }]}>
+              <Pressable
+                style={styles.sheetFlex}
+                accessibilityLabel="表示モードの設定を閉じる"
+                onPress={closeModeSheet}
+              />
+            </Animated.View>
+            <Animated.View
+              style={{
+                transform: [
+                  {
+                    translateY: sheetAnim.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [360, 0],
+                    }),
+                  },
+                ],
+              }}>
+            <View style={[styles.sheet, { backgroundColor: theme.background }]}>
               <ThemedText type="smallBold" themeColor="textSecondary">
                 カレンダーの表示モード
               </ThemedText>
@@ -503,7 +529,7 @@ export function CalendarScreen() {
             </View>
             <View style={styles.settingRow}>
               <View style={styles.settingLabel}>
-                <ThemedText>気分・アイコン</ThemedText>
+                <ThemedText>気分</ThemedText>
               </View>
               <Switch
                 value={viewMode.showMark}
@@ -514,7 +540,7 @@ export function CalendarScreen() {
 
             <View style={styles.settingRow}>
               <View style={styles.settingLabel}>
-                <ThemedText>習慣アイコン</ThemedText>
+                <ThemedText>習慣</ThemedText>
               </View>
             </View>
             <View style={styles.habitChipRow}>
@@ -573,8 +599,9 @@ export function CalendarScreen() {
                 </ThemedText>
               </Pressable>
             )}
-            </Pressable>
-          </Pressable>
+            </View>
+            </Animated.View>
+          </View>
         </KeyboardAvoidingView>
       </Modal>
 
@@ -637,10 +664,17 @@ const styles = StyleSheet.create({
   sheetFlex: {
     flex: 1,
   },
-  sheetOverlay: {
+  sheetFlexEnd: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.35)',
     justifyContent: 'flex-end',
+  },
+  sheetBackdrop: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.35)',
   },
   sheet: {
     borderTopLeftRadius: Radius.xl,
