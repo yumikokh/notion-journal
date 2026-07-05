@@ -2,14 +2,15 @@ import type { MonthEntry } from '@/lib/supabase';
 
 /**
  * Entries worth showing in the journal list screen: those with diary text
- * or a cover photo, newest first. Entries with neither are dropped (e.g.
- * placeholder pages created only to track habits).
+ * or a cover photo, in day order (the 1st at the top — each month page
+ * reads front-to-back like a book). Entries with neither are dropped
+ * (e.g. placeholder pages created only to track habits).
  */
 export function selectJournalListEntries(entries: MonthEntry[]): MonthEntry[] {
   const filtered = entries.filter(
     (entry) => (entry.diary ?? '').trim().length > 0 || entry.coverUrl !== null,
   );
-  return [...filtered].sort((a, b) => b.date.localeCompare(a.date));
+  return [...filtered].sort((a, b) => a.date.localeCompare(b.date));
 }
 
 /**

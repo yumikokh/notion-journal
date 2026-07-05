@@ -35,6 +35,8 @@ import {
   habitIcon,
 } from '@/features/journal/habit-icons';
 import { useMonthEntries } from '@/features/journal/use-month-entries';
+import { computeStreak } from '@/features/insights/insights';
+import { notionChipColor } from '@/features/notion/colors';
 import { useTheme } from '@/hooks/use-theme';
 import { toDateKey } from '@/lib/date';
 import { isSupabaseEnvConfigured } from '@/lib/env';

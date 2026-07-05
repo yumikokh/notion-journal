@@ -42,14 +42,14 @@ describe('selectJournalListEntries', () => {
     expect(selectJournalListEntries(entries)).toHaveLength(0);
   });
 
-  it('sorts the result by date, newest first', () => {
+  it('sorts the result by date, oldest first (a month page reads like a book)', () => {
     const entries = [
-      makeEntry({ date: '2026-07-01', diary: 'a' }),
       makeEntry({ date: '2026-07-15', diary: 'b' }),
+      makeEntry({ date: '2026-07-01', diary: 'a' }),
       makeEntry({ date: '2026-07-08', diary: 'c' }),
     ];
     const result = selectJournalListEntries(entries);
-    expect(result.map((e) => e.date)).toEqual(['2026-07-15', '2026-07-08', '2026-07-01']);
+    expect(result.map((e) => e.date)).toEqual(['2026-07-01', '2026-07-08', '2026-07-15']);
   });
 });
 
