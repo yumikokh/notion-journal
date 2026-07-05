@@ -6,6 +6,7 @@ import { ThemedText } from '@/components/themed-text';
 import { Radius, Spacing } from '@/constants/theme';
 import type { MonthCell } from '@/features/journal/build-month-grid';
 import type { CalendarPrefs } from '@/features/journal/calendar-prefs';
+import { coverImageSource } from '@/features/journal/cover-image';
 import { habitIcon } from '@/features/journal/habit-icons';
 import { useMonthEntries } from '@/features/journal/use-month-entries';
 import { notionChipColor } from '@/features/notion/colors';
@@ -160,7 +161,7 @@ function DayCell({
         {cover && (
           <>
             <Image
-              source={cover}
+              source={coverImageSource(cover)}
               style={StyleSheet.absoluteFill}
               contentFit="cover"
               transition={120}

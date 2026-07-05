@@ -1,11 +1,14 @@
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
-import { ChevronLeft } from 'lucide-react-native';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Check, ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react-native';
+import { useCallback, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
+  Modal,
   Pressable,
+  RefreshControl,
+  ScrollView,
   StyleSheet,
   View,
   useColorScheme,
@@ -16,7 +19,9 @@ import { ThemedText } from '@/components/themed-text';
 import { Radius, Spacing } from '@/constants/theme';
 import { DayDrawer } from '@/features/journal/components/day-drawer';
 import { FEELINGS, type Feeling } from '@/features/journal/draft';
+import { coverImageSource } from '@/features/journal/cover-image';
 import {
+  buildMonthOptions,
   formatMonthHeader,
   selectJournalListEntries,
   shiftYearMonth,
@@ -28,18 +33,15 @@ import { isSupabaseEnvConfigured } from '@/lib/env';
 import type { MonthEntry, NotionSelectColor } from '@/lib/supabase';
 
 const WEEKDAY_LABELS = ['日', '月', '火', '水', '木', '金', '土'];
-/** Cap on how many months back we'll lazy-load (current month + this many). */
+/** How far back the month picker reaches (matches the calendar's range). */
 const MAX_MONTHS_BACK = 24;
 
-type MonthState = {
-  data: MonthEntry[] | undefined;
-  isLoading: boolean;
-};
-
-type ListItem =
-  | { key: string; type: 'header'; label: string }
-  | { key: string; type: 'entry'; entry: MonthEntry };
-
+/**
+ * Month-scoped journal list: one month at a time, switched with ‹ › arrows
+ * or by tapping the title to open a month picker. A single month per view
+ * keeps "5月の日記を読み返す" one tap away instead of scrolling a long
+ * combined feed, and needs just one month query at a time.
+ */
 export function JournalListScreen() {
   const theme = useTheme();
   const router = useRouter();
@@ -50,83 +52,52 @@ export function JournalListScreen() {
     const now = new Date();
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
   }, []);
+  const monthOptions = useMemo(
+    () => buildMonthOptions(currentYearMonth, MAX_MONTHS_BACK),
+    [currentYearMonth],
+  );
 
-  // Newest-first list of loaded months. Starts with current + previous
-  // month; onEndReached appends one older month at a time up to the cap.
-  const [months, setMonths] = useState<string[]>(() => [
-    currentYearMonth,
-    shiftYearMonth(currentYearMonth, -1),
-  ]);
+  const [yearMonth, setYearMonth] = useState(currentYearMonth);
+  const [pickerOpen, setPickerOpen] = useState(false);
 
-  const [monthStates, setMonthStates] = useState<Record<string, MonthState>>({});
+  const atNewest = yearMonth === monthOptions[0];
+  const atOldest = yearMonth === monthOptions[monthOptions.length - 1];
+  const goPrev = useCallback(() => {
+    if (!atOldest) setYearMonth((m) => shiftYearMonth(m, -1));
+  }, [atOldest]);
+  const goNext = useCallback(() => {
+    if (!atNewest) setYearMonth((m) => shiftYearMonth(m, 1));
+  }, [atNewest]);
 
-  const handleMonthUpdate = useCallback((month: string, state: MonthState) => {
-    setMonthStates((prev) => {
-      const existing = prev[month];
-      if (existing && existing.isLoading === state.isLoading && existing.data === state.data) {
-        return prev;
-      }
-      return { ...prev, [month]: state };
+  const entries = useMonthEntries(yearMonth, { enabled: envOk });
+  const listEntries = useMemo(
+    () => selectJournalListEntries(entries.data ?? []),
+    [entries.data],
+  );
+
+  const feelingColorMap = useMemo(() => {
+    const map: Partial<Record<Feeling, NotionSelectColor | null>> = {};
+    entries.data?.forEach((entry) => {
+      if (!entry.feeling || !FEELINGS.includes(entry.feeling as Feeling)) return;
+      const key = entry.feeling as Feeling;
+      if (!(key in map)) map[key] = entry.feelingColor;
     });
-  }, []);
-
-  const loadMoreMonths = useCallback(() => {
-    setMonths((prev) => {
-      // `prev.length` equals the offset (in months) of the next candidate
-      // — index 0 is the current month, index 1 is one month back, etc.
-      if (prev.length > MAX_MONTHS_BACK) return prev;
-      const last = prev[prev.length - 1];
-      const next = shiftYearMonth(last, -1);
-      return [...prev, next];
-    });
-  }, []);
+    return map;
+  }, [entries.data]);
 
   const [drawerDate, setDrawerDate] = useState<string | null>(null);
   const openDay = useCallback((dateKey: string) => setDrawerDate(dateKey), []);
   const closeDrawer = useCallback(() => setDrawerDate(null), []);
 
-  const listItems = useMemo(() => {
-    const items: ListItem[] = [];
-    for (const month of months) {
-      const selected = selectJournalListEntries(monthStates[month]?.data ?? []);
-      if (selected.length === 0) continue;
-      items.push({ key: `header-${month}`, type: 'header', label: formatMonthHeader(month) });
-      for (const entry of selected) {
-        items.push({ key: entry.pageId, type: 'entry', entry });
-      }
-    }
-    return items;
-  }, [months, monthStates]);
-
-  // Aggregate feeling → Notion color across every loaded month so the
-  // DayDrawer's FeelingPicker can tint options with the user's real palette.
-  const feelingColorMap = useMemo(() => {
-    const map: Partial<Record<Feeling, NotionSelectColor | null>> = {};
-    for (const month of months) {
-      monthStates[month]?.data?.forEach((entry) => {
-        if (!entry.feeling || !FEELINGS.includes(entry.feeling as Feeling)) return;
-        const key = entry.feeling as Feeling;
-        if (!(key in map)) map[key] = entry.feelingColor;
-      });
-    }
-    return map;
-  }, [months, monthStates]);
-
-  const isFetchingAny = envOk && months.some((month) => monthStates[month]?.isLoading !== false);
+  const selectMonth = useCallback((month: string) => {
+    setYearMonth(month);
+    setPickerOpen(false);
+  }, []);
 
   const renderItem = useCallback(
-    ({ item }: { item: ListItem }) => {
-      if (item.type === 'header') {
-        return (
-          <ThemedText type="smallBold" themeColor="textSecondary" style={styles.sectionHeader}>
-            {item.label}
-          </ThemedText>
-        );
-      }
-      return (
-        <JournalCard entry={item.entry} scheme={scheme} onPress={() => openDay(item.entry.date)} />
-      );
-    },
+    ({ item }: { item: MonthEntry }) => (
+      <JournalCard entry={item} scheme={scheme} onPress={() => openDay(item.date)} />
+    ),
     [scheme, openDay],
   );
 
@@ -141,78 +112,118 @@ export function JournalListScreen() {
           style={styles.headerSide}>
           <ChevronLeft size={24} color={theme.text} strokeWidth={2} />
         </Pressable>
-        <ThemedText type="subtitle" style={styles.headerTitle} numberOfLines={1}>
-          日記の一覧
-        </ThemedText>
+        <View style={styles.monthNav}>
+          <Pressable
+            onPress={goPrev}
+            disabled={atOldest}
+            accessibilityRole="button"
+            accessibilityLabel="前の月"
+            hitSlop={8}
+            style={[styles.monthNavBtn, { opacity: atOldest ? 0.3 : 1 }]}>
+            <ChevronLeft size={18} color={theme.textSecondary} strokeWidth={2} />
+          </Pressable>
+          <Pressable
+            onPress={() => setPickerOpen(true)}
+            accessibilityRole="button"
+            accessibilityLabel="月を選択"
+            style={styles.monthTitle}>
+            <ThemedText type="subtitle">{formatMonthHeader(yearMonth)}</ThemedText>
+            <ChevronDown size={16} color={theme.textSecondary} strokeWidth={2} />
+          </Pressable>
+          <Pressable
+            onPress={goNext}
+            disabled={atNewest}
+            accessibilityRole="button"
+            accessibilityLabel="次の月"
+            hitSlop={8}
+            style={[styles.monthNavBtn, { opacity: atNewest ? 0.3 : 1 }]}>
+            <ChevronRight size={18} color={theme.textSecondary} strokeWidth={2} />
+          </Pressable>
+        </View>
         <View style={styles.headerSide} />
       </View>
 
       <FlatList
-        data={listItems}
-        keyExtractor={(item) => item.key}
+        data={listEntries}
+        keyExtractor={(item) => item.pageId}
         renderItem={renderItem}
-        onEndReached={loadMoreMonths}
-        onEndReachedThreshold={0.5}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.listContent}
-        ListFooterComponent={
-          isFetchingAny ? (
+        refreshControl={
+          envOk ? (
+            <RefreshControl
+              refreshing={entries.isRefetching}
+              onRefresh={() => {
+                entries.refetch();
+              }}
+              tintColor={theme.textSecondary}
+            />
+          ) : undefined
+        }
+        ListEmptyComponent={
+          entries.isLoading && envOk ? (
             <ActivityIndicator
               size="small"
               color={theme.textSecondary}
-              style={styles.footerSpinner}
+              style={styles.emptySpinner}
             />
-          ) : null
-        }
-        ListEmptyComponent={
-          isFetchingAny ? null : !envOk ? (
+          ) : !envOk ? (
             <ThemedText type="small" themeColor="textSecondary" style={styles.emptyText}>
               Notion 未接続
             </ThemedText>
           ) : (
             <ThemedText type="small" themeColor="textSecondary" style={styles.emptyText}>
-              まだ日記がありません。今日のひとことから始めてみませんか？
+              この月の日記はまだありません。
             </ThemedText>
           )
         }
       />
 
-      {months.map((month) => (
-        <MonthDataLoader
-          key={month}
-          month={month}
-          enabled={envOk}
-          onUpdate={handleMonthUpdate}
-        />
-      ))}
+      <Modal
+        visible={pickerOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setPickerOpen(false)}>
+        <Pressable
+          style={styles.pickerOverlay}
+          accessibilityLabel="月の選択を閉じる"
+          onPress={() => setPickerOpen(false)}>
+          {/* Stop overlay-press from closing when tapping inside the sheet. */}
+          <Pressable
+            style={[styles.pickerSheet, { backgroundColor: theme.background }]}
+            onPress={(e) => e.stopPropagation()}>
+            <ThemedText type="smallBold" themeColor="textSecondary" style={styles.pickerTitle}>
+              月を選択
+            </ThemedText>
+            <ScrollView style={styles.pickerScroll}>
+              {monthOptions.map((month) => {
+                const selected = month === yearMonth;
+                return (
+                  <Pressable
+                    key={month}
+                    onPress={() => selectMonth(month)}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected }}
+                    style={({ pressed }) => [
+                      styles.pickerRow,
+                      selected && { backgroundColor: theme.accentSoft },
+                      pressed && { opacity: 0.6 },
+                    ]}>
+                    <ThemedText style={selected ? { color: theme.accent } : undefined}>
+                      {formatMonthHeader(month)}
+                    </ThemedText>
+                    {selected && <Check size={16} color={theme.accent} strokeWidth={2.5} />}
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+          </Pressable>
+        </Pressable>
+      </Modal>
 
       <DayDrawer date={drawerDate} onClose={closeDrawer} feelingColors={feelingColorMap} />
     </ScreenContainer>
   );
-}
-
-/**
- * Headless data loader — fetches one month's entries via the shared
- * `useMonthEntries` query and reports the result up to the parent. Kept as
- * its own component (rather than calling the hook in a loop) so React's
- * rules-of-hooks are respected while the number of loaded months grows.
- */
-function MonthDataLoader({
-  month,
-  enabled,
-  onUpdate,
-}: {
-  month: string;
-  enabled: boolean;
-  onUpdate: (month: string, state: MonthState) => void;
-}) {
-  const query = useMonthEntries(month, { enabled });
-
-  useEffect(() => {
-    onUpdate(month, { data: query.data, isLoading: query.isLoading });
-  }, [month, query.data, query.isLoading, onUpdate]);
-
-  return null;
 }
 
 type JournalCardProps = {
@@ -241,7 +252,7 @@ function JournalCard({ entry, scheme, onPress }: JournalCardProps) {
       ]}>
       {entry.coverUrl && (
         <Image
-          source={{ uri: entry.coverUrl }}
+          source={coverImageSource(entry.coverUrl)}
           style={styles.cardCover}
           contentFit="cover"
           transition={150}
@@ -282,24 +293,60 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     justifyContent: 'center',
   },
-  headerTitle: {
+  monthNav: {
     flex: 1,
-    textAlign: 'center',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Spacing.two,
+  },
+  monthNavBtn: {
+    width: 28,
+    height: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  monthTitle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.one,
   },
   listContent: {
     gap: Spacing.three,
     paddingBottom: Spacing.five,
   },
-  sectionHeader: {
-    marginTop: Spacing.two,
-    marginBottom: Spacing.one,
-  },
-  footerSpinner: {
-    paddingVertical: Spacing.three,
+  emptySpinner: {
+    paddingVertical: Spacing.five,
   },
   emptyText: {
     textAlign: 'center',
     paddingVertical: Spacing.five,
+  },
+  pickerOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'center',
+    padding: Spacing.five,
+  },
+  pickerSheet: {
+    borderRadius: Radius.xl,
+    paddingVertical: Spacing.three,
+    maxHeight: '60%',
+  },
+  pickerTitle: {
+    textAlign: 'center',
+    paddingBottom: Spacing.two,
+  },
+  pickerScroll: {
+    paddingHorizontal: Spacing.two,
+  },
+  pickerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: Spacing.three,
+    paddingVertical: Spacing.two + 2,
+    borderRadius: Radius.md,
   },
   card: {
     borderRadius: Radius.lg,

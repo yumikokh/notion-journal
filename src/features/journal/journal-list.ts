@@ -31,3 +31,15 @@ export function formatMonthHeader(yearMonth: string): string {
   const [yearStr, monthStr] = yearMonth.split('-');
   return `${Number(yearStr)}年${Number(monthStr)}月`;
 }
+
+/**
+ * Months selectable in the journal list's month picker: the current month
+ * followed by `monthsBack` older months, newest first.
+ */
+export function buildMonthOptions(currentYearMonth: string, monthsBack: number): string[] {
+  const options: string[] = [];
+  for (let offset = 0; offset >= -monthsBack; offset--) {
+    options.push(shiftYearMonth(currentYearMonth, offset));
+  }
+  return options;
+}

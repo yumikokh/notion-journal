@@ -1,6 +1,7 @@
 import { describe, expect, it } from '@jest/globals';
 
 import {
+  buildMonthOptions,
   formatMonthHeader,
   selectJournalListEntries,
   shiftYearMonth,
@@ -71,5 +72,15 @@ describe('formatMonthHeader', () => {
   it('formats a YYYY-MM string as a Japanese month header', () => {
     expect(formatMonthHeader('2026-07')).toBe('2026年7月');
     expect(formatMonthHeader('2025-01')).toBe('2025年1月');
+  });
+});
+
+describe('buildMonthOptions', () => {
+  it('lists the current month plus the requested number of older months, newest first', () => {
+    expect(buildMonthOptions('2026-07', 3)).toEqual(['2026-07', '2026-06', '2026-05', '2026-04']);
+  });
+
+  it('crosses year boundaries', () => {
+    expect(buildMonthOptions('2026-01', 2)).toEqual(['2026-01', '2025-12', '2025-11']);
   });
 });

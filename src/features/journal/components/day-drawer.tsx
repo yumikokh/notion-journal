@@ -1,10 +1,10 @@
+import { Image as CoverImage } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import { Sparkles, Trash2 } from 'lucide-react-native';
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
-  Image,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -33,6 +33,7 @@ import {
   type Feeling,
   type UserDraftAction,
 } from '@/features/journal/draft';
+import { coverImageSource } from '@/features/journal/cover-image';
 import { useAiStructure } from '@/features/journal/use-ai-structure';
 import { useRemoveCover } from '@/features/journal/use-remove-cover';
 import { useSaveAll } from '@/features/journal/use-save-today';
@@ -397,7 +398,12 @@ function DayDrawerContent({
               style={styles.coverPressable}>
               {displayCoverUri ? (
                 <View style={styles.coverWrap}>
-                  <Image source={{ uri: displayCoverUri }} style={styles.coverImage} />
+                  <CoverImage
+                    source={coverImageSource(displayCoverUri)}
+                    style={styles.coverImage}
+                    contentFit="cover"
+                    transition={150}
+                  />
                   {pendingPhoto && (
                     <View
                       style={[
