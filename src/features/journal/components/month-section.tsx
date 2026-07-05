@@ -5,7 +5,7 @@ import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
 import { ThemedText } from '@/components/themed-text';
 import { Radius, Spacing } from '@/constants/theme';
 import type { MonthCell } from '@/features/journal/build-month-grid';
-import type { CalendarPrefs } from '@/features/journal/calendar-prefs';
+import type { CalendarViewMode } from '@/features/journal/calendar-prefs';
 import { coverImageSource } from '@/features/journal/cover-image';
 import { habitIcon } from '@/features/journal/habit-icons';
 import { useMonthEntries } from '@/features/journal/use-month-entries';
@@ -35,7 +35,7 @@ type MonthSectionProps = {
   weeks: MonthCell[][];
   cellWidth: number;
   cellHeight: number;
-  prefs: CalendarPrefs;
+  mode: CalendarViewMode;
   todayKey: string;
   scheme: 'light' | 'dark';
   /** False when Supabase env is missing — skips fetching entirely. */
@@ -54,7 +54,7 @@ export const MonthSection = memo(function MonthSection({
   weeks,
   cellWidth,
   cellHeight,
-  prefs,
+  mode,
   todayKey,
   scheme,
   enabled,
@@ -97,7 +97,7 @@ export const MonthSection = memo(function MonthSection({
                 isToday={cell.dateKey === todayKey}
                 cellWidth={cellWidth}
                 cellHeight={cellHeight}
-                prefs={prefs}
+                mode={mode}
                 scheme={scheme}
                 onPress={onDayPress}
               />
@@ -119,7 +119,7 @@ type DayCellProps = {
   isToday: boolean;
   cellWidth: number;
   cellHeight: number;
-  prefs: CalendarPrefs;
+  mode: CalendarViewMode;
   scheme: 'light' | 'dark';
   onPress: (dateKey: string) => void;
 };
@@ -130,15 +130,15 @@ function DayCell({
   isToday,
   cellWidth,
   cellHeight,
-  prefs,
+  mode,
   scheme,
   onPress,
 }: DayCellProps) {
   const theme = useTheme();
   const dayOfWeek = cell.date.getDay();
   const isHoliday = getJapaneseHoliday(cell.date) !== null;
-  const cover = prefs.showCover && entry?.coverUrl ? entry.coverUrl : null;
-  const diaryInCell = prefs.showDiary && entry?.diary ? entry.diary.trim() : '';
+  const cover = mode.showCover && entry?.coverUrl ? entry.coverUrl : null;
+  const diaryInCell = mode.showDiary && entry?.diary ? entry.diary.trim() : '';
 
   const dateColor = cover
     ? '#ffffff'
@@ -183,13 +183,7 @@ function DayCell({
             {cell.date.getDate()}
           </ThemedText>
         </View>
-        <CellMark
-          entry={entry}
-          habitOverlay={prefs.habitOverlay}
-          habitOverlayActive={prefs.habitOverlay.length > 0}
-          scheme={scheme}
-          overCover={Boolean(cover)}
-        />
+        <CellMark entry={entry} mode={mode} scheme={scheme} overCover={Boolean(cover)} />
         {diaryInCell.length > 0 && (
           <ThemedText
             type="small"
@@ -209,15 +203,19 @@ function DayCell({
 
 type CellMarkProps = {
   entry: MonthEntry | null;
-  habitOverlay: string[];
-  habitOverlayActive: boolean;
+  mode: CalendarViewMode;
   scheme: 'light' | 'dark';
   overCover: boolean;
 };
 
-function CellMark({ entry, habitOverlay, habitOverlayActive, scheme, overCover }: CellMarkProps) {
-  if (habitOverlayActive) {
-    const activeHabits = entry ? habitOverlay.filter((k) => entry.habits?.[k]) : [];
+function CellMark({ entry, mode, scheme, overCover }: CellMarkProps) {
+  const habitsActive = mode.habits === 'all' || mode.habits.length > 0;
+  if (habitsActive) {
+    const checked = entry
+      ? Object.keys(entry.habits ?? {}).filter((k) => entry.habits?.[k])
+      : [];
+    const activeHabits =
+      mode.habits === 'all' ? checked : checked.filter((k) => mode.habits.includes(k));
     if (activeHabits.length === 0) {
       return null;
     }
@@ -230,6 +228,10 @@ function CellMark({ entry, habitOverlay, habitOverlayActive, scheme, overCover }
         })}
       </View>
     );
+  }
+
+  if (!mode.showMark) {
+    return null;
   }
 
   if (entry?.icon?.type === 'emoji') {

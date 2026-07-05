@@ -4,9 +4,11 @@ import { LayoutList, SlidersHorizontal } from 'lucide-react-native';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   FlatList,
+  Modal,
   Pressable,
   RefreshControl,
   StyleSheet,
+  Switch,
   View,
   useColorScheme,
   type ViewToken,
@@ -20,9 +22,11 @@ import { computeStreak } from '@/features/insights/insights';
 import { buildMonthWeeks, type MonthCell } from '@/features/journal/build-month-grid';
 import {
   DEFAULT_PREFS,
+  activeViewMode,
   loadCalendarPrefs,
   saveCalendarPrefs,
   type CalendarPrefs,
+  type CalendarViewMode,
 } from '@/features/journal/calendar-prefs';
 import { DayDrawer } from '@/features/journal/components/day-drawer';
 import {
@@ -97,8 +101,9 @@ export function CalendarScreen() {
     loadCalendarPrefs().then(setPrefs);
   }, []);
 
-  // Filter panel visibility — hidden by default behind the action button.
-  const [showFilters, setShowFilters] = useState(false);
+  // View-mode sheet visibility (switch + customize the display modes).
+  const [modeSheetOpen, setModeSheetOpen] = useState(false);
+  const viewMode = activeViewMode(prefs);
 
   const [drawerDate, setDrawerDate] = useState<string | null>(null);
 
@@ -188,24 +193,33 @@ export function CalendarScreen() {
     });
   }, []);
 
-  const toggleHabit = useCallback(
-    (name: string) =>
+  const setActiveMode = useCallback(
+    (index: number) => updatePrefs((prev) => ({ ...prev, activeMode: index })),
+    [updatePrefs],
+  );
+  /** Edit the currently-selected mode's contents (persisted immediately). */
+  const updateActiveMode = useCallback(
+    (mutate: (mode: CalendarViewMode) => CalendarViewMode) =>
       updatePrefs((prev) => ({
         ...prev,
-        habitOverlay: prev.habitOverlay.includes(name)
-          ? prev.habitOverlay.filter((k) => k !== name)
-          : [...prev.habitOverlay, name],
+        modes: prev.modes.map((m, i) => (i === prev.activeMode ? mutate(m) : m)),
       })),
     [updatePrefs],
   );
-
-  const toggleShowDiary = useCallback(
-    () => updatePrefs((prev) => ({ ...prev, showDiary: !prev.showDiary })),
-    [updatePrefs],
-  );
-  const toggleShowCover = useCallback(
-    () => updatePrefs((prev) => ({ ...prev, showCover: !prev.showCover })),
-    [updatePrefs],
+  const toggleHabitInMode = useCallback(
+    (name: string) =>
+      updateActiveMode((mode) => {
+        // Tapping a single habit while "all" narrows the overlay to just it;
+        // otherwise toggle it in the explicit list.
+        if (mode.habits === 'all') return { ...mode, habits: [name] };
+        return {
+          ...mode,
+          habits: mode.habits.includes(name)
+            ? mode.habits.filter((k) => k !== name)
+            : [...mode.habits, name],
+        };
+      }),
+    [updateActiveMode],
   );
 
   const [refreshing, setRefreshing] = useState(false);
@@ -259,14 +273,14 @@ export function CalendarScreen() {
         weeks={item.weeks}
         cellWidth={cellWidth}
         cellHeight={cellHeight}
-        prefs={prefs}
+        mode={viewMode}
         todayKey={todayKey}
         scheme={scheme}
         enabled={envOk}
         onDayPress={openDay}
       />
     ),
-    [cellWidth, cellHeight, prefs, todayKey, scheme, envOk, openDay],
+    [cellWidth, cellHeight, viewMode, todayKey, scheme, envOk, openDay],
   );
 
   return (
@@ -310,93 +324,17 @@ export function CalendarScreen() {
               <LayoutList size={16} color={theme.textSecondary} strokeWidth={1.8} />
             </Pressable>
             <Pressable
-              onPress={() => setShowFilters((v) => !v)}
+              onPress={() => setModeSheetOpen(true)}
               accessibilityRole="button"
-              accessibilityLabel="表示項目"
-              accessibilityState={{ expanded: showFilters }}
-              style={[
-                styles.actionBtn,
-                {
-                  backgroundColor: showFilters
-                    ? theme.backgroundSelected
-                    : theme.backgroundElement,
-                },
-              ]}>
-              <SlidersHorizontal size={16} color={theme.textSecondary} strokeWidth={1.8} />
+              accessibilityLabel="表示モードを切り替え"
+              style={[styles.modePill, { backgroundColor: theme.backgroundElement }]}>
+              <SlidersHorizontal size={14} color={theme.textSecondary} strokeWidth={1.8} />
+              <ThemedText type="small" themeColor="textSecondary">
+                {viewMode.label}
+              </ThemedText>
             </Pressable>
           </View>
         </View>
-
-        {showFilters && (
-          <View style={styles.habitRow}>
-            {habitNames.map((name) => {
-              const on = prefs.habitOverlay.includes(name);
-              const Icon = habitIcon(name);
-              const iconColor = on ? theme.text : theme.textSecondary;
-              return (
-                <Pressable
-                  key={name}
-                  accessibilityRole="switch"
-                  accessibilityLabel={`${name} をカレンダーに表示`}
-                  accessibilityState={{ checked: on }}
-                  onPress={() => toggleHabit(name)}
-                  style={[
-                    styles.chipToggle,
-                    {
-                      backgroundColor: on ? theme.backgroundSelected : theme.backgroundElement,
-                    },
-                  ]}>
-                  <Icon size={14} color={iconColor} strokeWidth={1.8} />
-                  <ThemedText type="small" themeColor={on ? 'text' : 'textSecondary'}>
-                    {name}
-                  </ThemedText>
-                </Pressable>
-              );
-            })}
-            <Pressable
-              accessibilityRole="switch"
-              accessibilityState={{ checked: prefs.showDiary }}
-              onPress={toggleShowDiary}
-              style={[
-                styles.chipToggle,
-                {
-                  backgroundColor: prefs.showDiary
-                    ? theme.backgroundSelected
-                    : theme.backgroundElement,
-                },
-              ]}>
-              <DIARY_TOGGLE_ICON
-                size={14}
-                color={prefs.showDiary ? theme.text : theme.textSecondary}
-                strokeWidth={1.8}
-              />
-              <ThemedText type="small" themeColor={prefs.showDiary ? 'text' : 'textSecondary'}>
-                Diary
-              </ThemedText>
-            </Pressable>
-            <Pressable
-              accessibilityRole="switch"
-              accessibilityState={{ checked: prefs.showCover }}
-              onPress={toggleShowCover}
-              style={[
-                styles.chipToggle,
-                {
-                  backgroundColor: prefs.showCover
-                    ? theme.backgroundSelected
-                    : theme.backgroundElement,
-                },
-              ]}>
-              <COVER_TOGGLE_ICON
-                size={14}
-                color={prefs.showCover ? theme.text : theme.textSecondary}
-                strokeWidth={1.8}
-              />
-              <ThemedText type="small" themeColor={prefs.showCover ? 'text' : 'textSecondary'}>
-                Cover
-              </ThemedText>
-            </Pressable>
-          </View>
-        )}
 
         {!envOk && (
           <View style={styles.statusRow}>
@@ -452,6 +390,139 @@ export function CalendarScreen() {
           )}
         </View>
       </SafeAreaView>
+
+      {/* View-mode sheet: switching a mode applies immediately, so the
+          calendar behind the sheet live-previews the change. */}
+      <Modal
+        visible={modeSheetOpen}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setModeSheetOpen(false)}>
+        <Pressable
+          style={styles.sheetOverlay}
+          accessibilityLabel="表示モードの設定を閉じる"
+          onPress={() => setModeSheetOpen(false)}>
+          <Pressable
+            style={[styles.sheet, { backgroundColor: theme.background }]}
+            onPress={(e) => e.stopPropagation()}>
+            <ThemedText type="smallBold" themeColor="textSecondary">
+              カレンダーの表示モード
+            </ThemedText>
+
+            <View style={styles.modeChipRow}>
+              {prefs.modes.map((m, i) => {
+                const selected = i === prefs.activeMode;
+                return (
+                  <Pressable
+                    key={m.key}
+                    onPress={() => setActiveMode(i)}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected }}
+                    style={[
+                      styles.modeChip,
+                      { backgroundColor: selected ? theme.accentSoft : theme.backgroundElement },
+                    ]}>
+                    <ThemedText
+                      type="smallBold"
+                      style={{ color: selected ? theme.accent : theme.textSecondary }}>
+                      {m.label}
+                    </ThemedText>
+                  </Pressable>
+                );
+              })}
+            </View>
+
+            <ThemedText type="small" themeColor="textSecondary">
+              「{viewMode.label}」モードで表示するもの
+            </ThemedText>
+
+            <View style={styles.settingRow}>
+              <View style={styles.settingLabel}>
+                <COVER_TOGGLE_ICON size={16} color={theme.textSecondary} strokeWidth={1.8} />
+                <ThemedText>写真</ThemedText>
+              </View>
+              <Switch
+                value={viewMode.showCover}
+                onValueChange={(v) => updateActiveMode((m) => ({ ...m, showCover: v }))}
+                trackColor={{ true: theme.accent }}
+              />
+            </View>
+            <View style={styles.settingRow}>
+              <View style={styles.settingLabel}>
+                <DIARY_TOGGLE_ICON size={16} color={theme.textSecondary} strokeWidth={1.8} />
+                <ThemedText>日記テキスト</ThemedText>
+              </View>
+              <Switch
+                value={viewMode.showDiary}
+                onValueChange={(v) => updateActiveMode((m) => ({ ...m, showDiary: v }))}
+                trackColor={{ true: theme.accent }}
+              />
+            </View>
+            <View style={styles.settingRow}>
+              <View style={styles.settingLabel}>
+                <ThemedText>気分・アイコン</ThemedText>
+              </View>
+              <Switch
+                value={viewMode.showMark}
+                onValueChange={(v) => updateActiveMode((m) => ({ ...m, showMark: v }))}
+                trackColor={{ true: theme.accent }}
+              />
+            </View>
+
+            <View style={styles.settingRow}>
+              <View style={styles.settingLabel}>
+                <ThemedText>習慣アイコン</ThemedText>
+              </View>
+            </View>
+            <View style={styles.habitChipRow}>
+              <Pressable
+                onPress={() =>
+                  updateActiveMode((m) => ({ ...m, habits: m.habits === 'all' ? [] : 'all' }))
+                }
+                accessibilityRole="switch"
+                accessibilityState={{ checked: viewMode.habits === 'all' }}
+                style={[
+                  styles.chipToggle,
+                  {
+                    backgroundColor:
+                      viewMode.habits === 'all' ? theme.accentSoft : theme.backgroundElement,
+                  },
+                ]}>
+                <ThemedText
+                  type="small"
+                  style={{
+                    color: viewMode.habits === 'all' ? theme.accent : theme.textSecondary,
+                  }}>
+                  すべて
+                </ThemedText>
+              </Pressable>
+              {habitNames.map((name) => {
+                const on = viewMode.habits === 'all' || viewMode.habits.includes(name);
+                const Icon = habitIcon(name);
+                const chipColor = on ? theme.accent : theme.textSecondary;
+                return (
+                  <Pressable
+                    key={name}
+                    accessibilityRole="switch"
+                    accessibilityLabel={`${name} をカレンダーに表示`}
+                    accessibilityState={{ checked: on }}
+                    onPress={() => toggleHabitInMode(name)}
+                    style={[
+                      styles.chipToggle,
+                      { backgroundColor: on ? theme.accentSoft : theme.backgroundElement },
+                    ]}>
+                    <Icon size={14} color={chipColor} strokeWidth={1.8} />
+                    <ThemedText type="small" style={{ color: chipColor }}>
+                      {name}
+                    </ThemedText>
+                  </Pressable>
+                );
+              })}
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
       <DayDrawer date={drawerDate} onClose={closeDrawer} feelingColors={feelingColorMap} />
     </ThemedView>
   );
@@ -500,12 +571,50 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  habitRow: {
+  modePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.one,
+    paddingHorizontal: Spacing.three,
+    height: 32,
+    borderRadius: Radius.lg,
+  },
+  sheetOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.35)',
+    justifyContent: 'flex-end',
+  },
+  sheet: {
+    borderTopLeftRadius: Radius.xl,
+    borderTopRightRadius: Radius.xl,
+    padding: Spacing.four,
+    paddingBottom: Spacing.five,
+    gap: Spacing.three,
+  },
+  modeChipRow: {
+    flexDirection: 'row',
+    gap: Spacing.two,
+  },
+  modeChip: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: Spacing.two + 2,
+    borderRadius: Radius.lg,
+  },
+  settingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  settingLabel: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.two,
+  },
+  habitChipRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: Spacing.one,
-    paddingHorizontal: Spacing.one,
-    paddingBottom: Spacing.two,
   },
   chipToggle: {
     flexDirection: 'row',

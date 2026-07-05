@@ -3,13 +3,14 @@ import { beforeEach, describe, expect, it } from '@jest/globals';
 
 import {
   DEFAULT_PREFS,
+  activeViewMode,
   loadCalendarPrefs,
   saveCalendarPrefs,
 } from './calendar-prefs';
 
 const KEY = 'notion-journal.calendar_prefs';
 
-describe('calendar-prefs', () => {
+describe('calendar-prefs (view modes)', () => {
   beforeEach(async () => {
     await AsyncStorage.clear();
   });
@@ -18,48 +19,62 @@ describe('calendar-prefs', () => {
     expect(await loadCalendarPrefs()).toEqual(DEFAULT_PREFS);
   });
 
-  it('round-trips selected habits through AsyncStorage', async () => {
-    await saveCalendarPrefs({
-      habitOverlay: ['Book', 'Exercise'],
-      showDiary: true,
-      showCover: false,
-    });
-    expect(await loadCalendarPrefs()).toEqual({
-      habitOverlay: ['Book', 'Exercise'],
-      showDiary: true,
-      showCover: false,
-    });
-  });
-
-  it('falls back to the defaults (diary off, cover on) when missing from stored data', async () => {
-    await AsyncStorage.setItem(KEY, JSON.stringify({ habitOverlay: ['Book'] }));
+  it('defaults to photo mode (cover on) with record/habit presets', async () => {
     const prefs = await loadCalendarPrefs();
-    expect(prefs.showDiary).toBe(false);
-    expect(prefs.showCover).toBe(true);
+    expect(activeViewMode(prefs).key).toBe('photo');
+    expect(activeViewMode(prefs).showCover).toBe(true);
+    expect(prefs.modes.map((m) => m.key)).toEqual(['photo', 'record', 'habit']);
+    expect(prefs.modes[2].habits).toBe('all');
   });
 
-  it('respects an explicit showCover=false from stored data', async () => {
-    await AsyncStorage.setItem(
-      KEY,
-      JSON.stringify({ habitOverlay: [], showDiary: false, showCover: false }),
-    );
-    expect((await loadCalendarPrefs()).showCover).toBe(false);
+  it('round-trips customized modes through AsyncStorage', async () => {
+    const custom = {
+      ...DEFAULT_PREFS,
+      activeMode: 2,
+      modes: [
+        { ...DEFAULT_PREFS.modes[0], showDiary: true },
+        { ...DEFAULT_PREFS.modes[1], showCover: true },
+        { ...DEFAULT_PREFS.modes[2], habits: ['Book', 'Exercise'] },
+      ],
+    };
+    await saveCalendarPrefs(custom);
+    expect(await loadCalendarPrefs()).toEqual(custom);
   });
 
-  it('keeps any string habit name from stored data (no allowlist)', async () => {
+  it('fills missing mode fields from the defaults', async () => {
     await AsyncStorage.setItem(
       KEY,
-      JSON.stringify({ habitOverlay: ['Book', 'Meditation', 'Exercise'] }),
+      JSON.stringify({ modes: [{ showCover: false }, {}, {}], activeMode: 0 }),
     );
-    expect((await loadCalendarPrefs()).habitOverlay).toEqual([
-      'Book',
-      'Meditation',
-      'Exercise',
-    ]);
+    const prefs = await loadCalendarPrefs();
+    expect(prefs.modes[0].showCover).toBe(false);
+    expect(prefs.modes[0].label).toBe('写真');
+    expect(prefs.modes[2].habits).toBe('all');
+  });
+
+  it('clamps a stored activeMode outside the valid range', async () => {
+    await AsyncStorage.setItem(KEY, JSON.stringify({ modes: [{}, {}, {}], activeMode: 9 }));
+    expect((await loadCalendarPrefs()).activeMode).toBe(2);
+  });
+
+  it('falls back to defaults for the pre-modes schema', async () => {
+    await AsyncStorage.setItem(
+      KEY,
+      JSON.stringify({ habitOverlay: ['Book'], showDiary: true, showCover: false }),
+    );
+    expect(await loadCalendarPrefs()).toEqual(DEFAULT_PREFS);
   });
 
   it('falls back to defaults on malformed JSON', async () => {
     await AsyncStorage.setItem(KEY, '{not-json');
     expect(await loadCalendarPrefs()).toEqual(DEFAULT_PREFS);
+  });
+
+  it('keeps only string habit names in an explicit list', async () => {
+    await AsyncStorage.setItem(
+      KEY,
+      JSON.stringify({ modes: [{}, {}, { habits: ['Book', 7, null] }], activeMode: 0 }),
+    );
+    expect((await loadCalendarPrefs()).modes[2].habits).toEqual(['Book']);
   });
 });
