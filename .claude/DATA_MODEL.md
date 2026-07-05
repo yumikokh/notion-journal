@@ -86,6 +86,11 @@ type JournalEntry = {
 
 `Weekly`（より分析的なふりかえり）と `Kpt`（Keep/Problem/Try/Knowledge）も同様に型として定義する。
 Weekly は AI週次分析の結果を素材にした横断的・分析的なレイヤーで、日々の感情の吐き出しは Daily が担う。
+Weekly の実体は Notion「↩️ Reflection DB」(`Type` select で Weekly/Monthly を切替) に対応する
+`WeeklyReflection` 型で、`よかったこと`(good) / `よくなかったこと`(problem) /
+`トライできること`(tryNext) / `次の具体目標`(nextGoal) の4つの rich_text と `Date` を持つ
+（型・マッピングは `src/features/reflect/weekly-reflection.ts`）。AI週次分析を保存する際は、
+この4プロパティに加えて分析全文をページ本文 markdown として書き込む（#16）。
 
 ## 書き込みフロー
 

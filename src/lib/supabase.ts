@@ -132,6 +132,31 @@ export function invokeAiWeeklyAnalyze(payload: { weekStart: string; weekEnd: str
   return invoke<unknown>('ai-weekly-analyze', payload);
 }
 
+/**
+ * Read the weekly reflection (Notion "↩️ Reflection DB", Type=Weekly) for a
+ * Monday→Sunday range. Returns the raw Notion page (or null); the caller maps
+ * it via `notionPageToWeeklyReflection`.
+ */
+export function invokeNotionWeeklyGet(payload: { weekStart: string; weekEnd: string }) {
+  return invoke<{ page: NotionPage | null }>('notion-weekly-get', payload);
+}
+
+/**
+ * Create or update a weekly reflection. On create the server sets
+ * Name/Date/Type="Weekly"; on update only `properties` are touched.
+ * When `bodyMarkdown` is supplied, the page body is replaced with it
+ * (used to persist the full AI weekly analysis, #16).
+ */
+export function invokeNotionWeeklySave(payload: {
+  notionPageId: string | null;
+  date: string;
+  name?: string;
+  properties: Record<string, unknown>;
+  bodyMarkdown?: string;
+}) {
+  return invoke<{ notionPageId: string }>('notion-weekly-save', payload);
+}
+
 export type GoogleOAuthStatus =
   | { connected: false }
   | { connected: true; scope: string; connectedAt: string };

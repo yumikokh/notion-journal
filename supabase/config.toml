@@ -437,6 +437,12 @@ verify_jwt = false
 [functions.ai-weekly-analyze]
 verify_jwt = false
 
+[functions.notion-weekly-get]
+verify_jwt = false
+
+[functions.notion-weekly-save]
+verify_jwt = false
+
 [functions.google-oauth-exchange]
 verify_jwt = false
 

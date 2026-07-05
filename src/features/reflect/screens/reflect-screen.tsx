@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Pressable,
@@ -15,9 +15,13 @@ import { useTheme } from '@/hooks/use-theme';
 import { isSupabaseEnvConfigured } from '@/lib/env';
 
 import { AnalysisResult } from '../components/analysis-result';
+import { SavedReflection } from '../components/saved-reflection';
 import { WeekPicker } from '../components/week-picker';
+import { useSaveWeeklyAnalysis } from '../use-save-weekly-analysis';
 import { useWeeklyAnalysis } from '../use-weekly-analysis';
+import { useWeeklyReflection } from '../use-weekly-reflection';
 import { getWeekRange, isSameWeek, shiftWeek, type WeekRange } from '../week-range';
+import { hasSavedReflection } from '../weekly-reflection';
 
 export function ReflectScreen() {
   const theme = useTheme();
@@ -34,6 +38,25 @@ export function ReflectScreen() {
   const wasAnalyzed = analyzedWeeks.has(range.start);
 
   const query = useWeeklyAnalysis(range, envOk && wasAnalyzed);
+  const saveMutation = useSaveWeeklyAnalysis(range);
+
+  // When the user hasn't run a fresh analysis this session, read back any
+  // reflection already saved to Notion for this week so reopening the app
+  // shows the saved KPT instead of forcing (and paying for) a re-analysis.
+  const reflectionQuery = useWeeklyReflection(range, { enabled: envOk && !wasAnalyzed });
+  const savedReflection =
+    reflectionQuery.data && hasSavedReflection(reflectionQuery.data)
+      ? reflectionQuery.data
+      : null;
+
+  // Reset the save state when the analysis changes underneath it — either the
+  // user switched weeks or regenerated — so a stale "保存済み" never lingers
+  // over a result that hasn't actually been saved yet.
+  useEffect(() => {
+    saveMutation.reset();
+    // saveMutation is stable across renders; only re-run when the result changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [range.start, query.dataUpdatedAt]);
 
   const handleAnalyze = () => {
     setAnalyzedWeeks((prev) => {
@@ -46,6 +69,28 @@ export function ReflectScreen() {
 
   const handleRegenerate = () => {
     query.refetch();
+  };
+
+  const handleSave = () => {
+    if (!query.data) return;
+    saveMutation.mutate({
+      analysis: query.data.analysis,
+      dailyCount: query.data.source.dailyCount,
+      calendarEventCount: query.data.source.calendarEventCount,
+    });
+  };
+
+  const handlePullRefresh = () => {
+    // Pull-to-refresh re-syncs the saved reflection from Notion and returns to
+    // the saved view, dropping any unsaved AI analysis for this week. It must
+    // NOT trigger a paid re-analysis — that stays behind the explicit buttons.
+    setAnalyzedWeeks((prev) => {
+      if (!prev.has(range.start)) return prev;
+      const next = new Set(prev);
+      next.delete(range.start);
+      return next;
+    });
+    reflectionQuery.refetch();
   };
 
   const canGoNext = !isSameWeek(range, currentWeek);
@@ -68,9 +113,13 @@ export function ReflectScreen() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scroll}
         refreshControl={
-          wasAnalyzed && query.data ? (
-            <RefreshControl refreshing={query.isFetching} onRefresh={handleRegenerate} />
-          ) : undefined
+          // Pull-to-refresh re-reads the saved reflection from Notion (cheap)
+          // and drops any unsaved AI analysis. It must NOT trigger the paid
+          // Claude analysis — that stays behind the explicit buttons.
+          <RefreshControl
+            refreshing={reflectionQuery.isFetching}
+            onRefresh={handlePullRefresh}
+          />
         }>
         <WeekPicker
           range={range}
@@ -81,21 +130,39 @@ export function ReflectScreen() {
         />
 
         {!wasAnalyzed ? (
-          <View style={styles.cta}>
-            <Pressable
-              onPress={handleAnalyze}
-              style={({ pressed }) => [
-                styles.button,
-                { backgroundColor: theme.text, opacity: pressed ? 0.7 : 1 },
-              ]}>
-              <ThemedText style={[styles.buttonText, { color: theme.background }]}>
-                分析する
+          reflectionQuery.isLoading ? (
+            <View style={styles.center}>
+              <ActivityIndicator color={theme.text} />
+            </View>
+          ) : savedReflection ? (
+            <>
+              <SavedReflection reflection={savedReflection} />
+              <Pressable
+                onPress={handleAnalyze}
+                style={({ pressed }) => [
+                  styles.secondaryButton,
+                  { borderColor: theme.text, opacity: pressed ? 0.6 : 1 },
+                ]}>
+                <ThemedText>もう一度分析する</ThemedText>
+              </Pressable>
+            </>
+          ) : (
+            <View style={styles.cta}>
+              <Pressable
+                onPress={handleAnalyze}
+                style={({ pressed }) => [
+                  styles.button,
+                  { backgroundColor: theme.text, opacity: pressed ? 0.7 : 1 },
+                ]}>
+                <ThemedText style={[styles.buttonText, { color: theme.background }]}>
+                  分析する
+                </ThemedText>
+              </Pressable>
+              <ThemedText themeColor="textSecondary" type="small" style={styles.ctaHint}>
+                指定週の Daily を集約して AI に投げます。1回 数秒〜十数秒。
               </ThemedText>
-            </Pressable>
-            <ThemedText themeColor="textSecondary" type="small" style={styles.ctaHint}>
-              指定週の Daily を集約して AI に投げます。1回 数秒〜十数秒。
-            </ThemedText>
-          </View>
+            </View>
+          )
         ) : query.isLoading || query.isFetching ? (
           <View style={styles.center}>
             <ActivityIndicator color={theme.text} />
@@ -125,14 +192,39 @@ export function ReflectScreen() {
               dailyCount={query.data.source.dailyCount}
               calendarEventCount={query.data.source.calendarEventCount}
             />
-            <Pressable
-              onPress={handleRegenerate}
-              style={({ pressed }) => [
-                styles.secondaryButton,
-                { borderColor: theme.text, opacity: pressed ? 0.6 : 1 },
-              ]}>
-              <ThemedText>再生成</ThemedText>
-            </Pressable>
+            <View style={styles.actions}>
+              <Pressable
+                onPress={handleSave}
+                disabled={saveMutation.isPending}
+                style={({ pressed }) => [
+                  styles.button,
+                  {
+                    backgroundColor: saveMutation.isSuccess ? '#22a06b' : theme.text,
+                    opacity: pressed || saveMutation.isPending ? 0.7 : 1,
+                  },
+                ]}>
+                <ThemedText style={[styles.buttonText, { color: theme.background }]}>
+                  {saveMutation.isPending
+                    ? '保存中…'
+                    : saveMutation.isSuccess
+                      ? 'Notionに保存済み ✓'
+                      : 'Notionに保存'}
+                </ThemedText>
+              </Pressable>
+              <Pressable
+                onPress={handleRegenerate}
+                style={({ pressed }) => [
+                  styles.secondaryButton,
+                  { borderColor: theme.text, opacity: pressed ? 0.6 : 1 },
+                ]}>
+                <ThemedText>再生成</ThemedText>
+              </Pressable>
+            </View>
+            {saveMutation.error ? (
+              <ThemedText themeColor="textSecondary" type="small" style={styles.saveError} selectable>
+                保存に失敗しました: {saveMutation.error.message}
+              </ThemedText>
+            ) : null}
           </>
         ) : null}
       </ScrollView>
@@ -187,5 +279,13 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.two,
     borderRadius: 999,
     borderWidth: 1,
+  },
+  actions: {
+    alignItems: 'center',
+    gap: Spacing.two,
+  },
+  saveError: {
+    textAlign: 'center',
+    color: '#d05545',
   },
 });
