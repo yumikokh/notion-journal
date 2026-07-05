@@ -1,9 +1,9 @@
 import { describe, expect, it } from '@jest/globals';
 
 import {
+  buildMonthDayItems,
   buildMonthOptions,
   formatMonthHeader,
-  selectJournalListEntries,
   shiftYearMonth,
 } from './journal-list';
 import type { MonthEntry } from '@/lib/supabase';
@@ -21,35 +21,35 @@ function makeEntry(overrides: Partial<MonthEntry>): MonthEntry {
   };
 }
 
-describe('selectJournalListEntries', () => {
-  it('keeps entries that have diary text only', () => {
-    const entries = [makeEntry({ date: '2026-07-01', diary: '良い一日だった' })];
-    expect(selectJournalListEntries(entries)).toHaveLength(1);
+describe('buildMonthDayItems', () => {
+  it('lists every day of a past month in reading order, pairing entries', () => {
+    const entries = [makeEntry({ date: '2026-06-15', diary: '良い一日だった' })];
+    const items = buildMonthDayItems('2026-06', entries, '2026-07-06');
+    expect(items).toHaveLength(30);
+    expect(items[0].dateKey).toBe('2026-06-01');
+    expect(items[29].dateKey).toBe('2026-06-30');
+    expect(items[14].entry?.diary).toBe('良い一日だった');
   });
 
-  it('keeps entries that have a cover photo only', () => {
-    const entries = [
-      makeEntry({ date: '2026-07-01', diary: '', coverUrl: 'https://example.com/a.jpg' }),
-    ];
-    expect(selectJournalListEntries(entries)).toHaveLength(1);
+  it('stops the current month at today (no future days)', () => {
+    const items = buildMonthDayItems('2026-07', [], '2026-07-06');
+    expect(items).toHaveLength(6);
+    expect(items[items.length - 1].dateKey).toBe('2026-07-06');
   });
 
-  it('drops entries with neither diary nor cover', () => {
+  it('marks diary or cover as content-worthy, habit-only entries as empty days', () => {
     const entries = [
-      makeEntry({ date: '2026-07-01', diary: '' }),
-      makeEntry({ date: '2026-07-02', diary: '   ' }),
+      makeEntry({ date: '2026-06-01', diary: 'テキスト' }),
+      makeEntry({ date: '2026-06-02', coverUrl: 'https://example.com/a.jpg' }),
+      makeEntry({ date: '2026-06-03', diary: '   ', habits: { Book: true } }),
     ];
-    expect(selectJournalListEntries(entries)).toHaveLength(0);
-  });
-
-  it('sorts the result by date, oldest first (a month page reads like a book)', () => {
-    const entries = [
-      makeEntry({ date: '2026-07-15', diary: 'b' }),
-      makeEntry({ date: '2026-07-01', diary: 'a' }),
-      makeEntry({ date: '2026-07-08', diary: 'c' }),
-    ];
-    const result = selectJournalListEntries(entries);
-    expect(result.map((e) => e.date)).toEqual(['2026-07-01', '2026-07-08', '2026-07-15']);
+    const items = buildMonthDayItems('2026-06', entries, '2026-07-06');
+    expect(items[0].hasContent).toBe(true);
+    expect(items[1].hasContent).toBe(true);
+    expect(items[2].hasContent).toBe(false);
+    expect(items[2].entry?.habits).toEqual({ Book: true }); // feeling/habits still available for the slim row
+    expect(items[3].hasContent).toBe(false);
+    expect(items[3].entry).toBeNull();
   });
 });
 

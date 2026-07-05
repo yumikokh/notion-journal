@@ -1,16 +1,42 @@
 import type { MonthEntry } from '@/lib/supabase';
 
+export type JournalDayItem = {
+  /** YYYY-MM-DD */
+  dateKey: string;
+  /** The Notion entry for the day, when one exists (may be habit-only). */
+  entry: MonthEntry | null;
+  /**
+   * True when the day has journal content worth a full card (diary text or
+   * a cover photo). Days without it render as a slim "未記入" row that
+   * invites filling the day in.
+   */
+  hasContent: boolean;
+};
+
 /**
- * Entries worth showing in the journal list screen: those with diary text
- * or a cover photo, in day order (the 1st at the top — each month page
- * reads front-to-back like a book). Entries with neither are dropped
- * (e.g. placeholder pages created only to track habits).
+ * Every day of a month in reading order (the 1st at the top — each month
+ * page reads front-to-back like a book), including days with no entry yet.
+ * Future days are omitted so the current month ends at today.
  */
-export function selectJournalListEntries(entries: MonthEntry[]): MonthEntry[] {
-  const filtered = entries.filter(
-    (entry) => (entry.diary ?? '').trim().length > 0 || entry.coverUrl !== null,
-  );
-  return [...filtered].sort((a, b) => a.date.localeCompare(b.date));
+export function buildMonthDayItems(
+  yearMonth: string,
+  entries: MonthEntry[],
+  todayKey: string,
+): JournalDayItem[] {
+  const [yearStr, monthStr] = yearMonth.split('-');
+  const daysInMonth = new Date(Number(yearStr), Number(monthStr), 0).getDate();
+  const byDate = new Map(entries.map((e) => [e.date, e]));
+
+  const items: JournalDayItem[] = [];
+  for (let day = 1; day <= daysInMonth; day++) {
+    const dateKey = `${yearMonth}-${String(day).padStart(2, '0')}`;
+    if (dateKey > todayKey) break;
+    const entry = byDate.get(dateKey) ?? null;
+    const hasContent =
+      entry !== null && ((entry.diary ?? '').trim().length > 0 || entry.coverUrl !== null);
+    items.push({ dateKey, entry, hasContent });
+  }
+  return items;
 }
 
 /**

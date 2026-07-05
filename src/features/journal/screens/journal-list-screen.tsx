@@ -1,6 +1,6 @@
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
-import { Check, ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react-native';
+import { Check, ChevronDown, ChevronLeft, ChevronRight, Plus } from 'lucide-react-native';
 import { useCallback, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -25,13 +25,15 @@ import { coverImageSource } from '@/features/journal/cover-image';
 import { DayDrawer } from '@/features/journal/components/day-drawer';
 import { FEELINGS, type Feeling } from '@/features/journal/draft';
 import {
+  buildMonthDayItems,
   buildMonthOptions,
   formatMonthHeader,
-  selectJournalListEntries,
+  type JournalDayItem,
 } from '@/features/journal/journal-list';
 import { useMonthEntries } from '@/features/journal/use-month-entries';
 import { notionChipColor } from '@/features/notion/colors';
 import { useTheme } from '@/hooks/use-theme';
+import { toDateKey } from '@/lib/date';
 import { isSupabaseEnvConfigured } from '@/lib/env';
 import type { MonthEntry, NotionSelectColor } from '@/lib/supabase';
 
@@ -260,27 +262,44 @@ type MonthPageProps = {
   onDayPress: (dateKey: string) => void;
 };
 
-/** One swipeable page: a single month's entry cards in a vertical list. */
+/**
+ * One swipeable page: every day of the month in a vertical list — full
+ * cards for days with journal content, slim tappable rows for days not
+ * written yet (so past days can be filled in from here).
+ */
 function MonthPage({ yearMonth, width, envOk, scheme, onDayPress }: MonthPageProps) {
   const theme = useTheme();
   const entries = useMonthEntries(yearMonth, { enabled: envOk });
-  const listEntries = useMemo(
-    () => selectJournalListEntries(entries.data ?? []),
-    [entries.data],
+  const todayKey = useMemo(() => toDateKey(new Date()), []);
+  // Keep the list empty until data arrives so the loading spinner shows
+  // instead of a flash of all-unwritten rows.
+  const dayItems = useMemo(
+    () =>
+      !envOk || entries.isLoading
+        ? []
+        : buildMonthDayItems(yearMonth, entries.data ?? [], todayKey),
+    [envOk, entries.isLoading, yearMonth, entries.data, todayKey],
   );
 
   const renderItem = useCallback(
-    ({ item }: { item: MonthEntry }) => (
-      <JournalCard entry={item} scheme={scheme} onPress={() => onDayPress(item.date)} />
-    ),
+    ({ item }: { item: JournalDayItem }) =>
+      item.hasContent && item.entry ? (
+        <JournalCard
+          entry={item.entry}
+          scheme={scheme}
+          onPress={() => onDayPress(item.dateKey)}
+        />
+      ) : (
+        <EmptyDayRow item={item} scheme={scheme} onPress={() => onDayPress(item.dateKey)} />
+      ),
     [scheme, onDayPress],
   );
 
   return (
     <View style={{ width }}>
       <FlatList
-        data={listEntries}
-        keyExtractor={(item) => item.pageId}
+        data={dayItems}
+        keyExtractor={(item) => item.dateKey}
         renderItem={renderItem}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.listContent}
@@ -314,6 +333,53 @@ function MonthPage({ yearMonth, width, envOk, scheme, onDayPress }: MonthPagePro
         }
       />
     </View>
+  );
+}
+
+const formatDayLabel = (dateKey: string) => {
+  const [yyyy, mm, dd] = dateKey.split('-');
+  const dateObj = new Date(Number(yyyy), Number(mm) - 1, Number(dd));
+  return `${Number(mm)}/${Number(dd)} (${WEEKDAY_LABELS[dateObj.getDay()]})`;
+};
+
+type EmptyDayRowProps = {
+  item: JournalDayItem;
+  scheme: 'light' | 'dark';
+  onPress: () => void;
+};
+
+/**
+ * A day without journal content: a quiet row inviting the user to fill it
+ * in. A feeling recorded that day (habit-only entries) still shows.
+ */
+function EmptyDayRow({ item, scheme, onPress }: EmptyDayRowProps) {
+  const theme = useTheme();
+  const entry = item.entry;
+  const chip = entry?.feeling ? notionChipColor(entry.feelingColor, scheme) : null;
+
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={`${formatDayLabel(item.dateKey)} の日記を書く`}
+      style={({ pressed }) => [
+        styles.emptyDayRow,
+        { borderBottomColor: theme.backgroundElement },
+        pressed && { opacity: 0.6 },
+      ]}>
+      <ThemedText type="small" themeColor="textSecondary">
+        {formatDayLabel(item.dateKey)}
+      </ThemedText>
+      {chip && entry?.feeling ? (
+        <View style={[styles.chip, { backgroundColor: chip.background }]}>
+          <ThemedText style={[styles.chipText, { color: chip.text }]} numberOfLines={1}>
+            {entry.feeling}
+          </ThemedText>
+        </View>
+      ) : null}
+      <View style={styles.emptyDaySpacer} />
+      <Plus size={14} color={theme.textSecondary} strokeWidth={1.8} />
+    </Pressable>
   );
 }
 
@@ -420,6 +486,17 @@ const styles = StyleSheet.create({
   },
   emptySpinner: {
     paddingVertical: Spacing.five,
+  },
+  emptyDayRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.two,
+    paddingVertical: Spacing.one + 2,
+    paddingHorizontal: Spacing.two,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  emptyDaySpacer: {
+    flex: 1,
   },
   emptyText: {
     textAlign: 'center',
