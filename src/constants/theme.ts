@@ -5,20 +5,37 @@
 
 import { Platform } from 'react-native';
 
+/**
+ * Warm, gentle palette: off-white paper tones in light mode, warm charcoal
+ * in dark mode. `accent` is a soft terracotta used sparingly (today marker,
+ * primary buttons); `accentSoft` is its background-strength counterpart.
+ * `holiday` / `saturday` keep the Japanese calendar convention (red Sun/
+ * holiday, blue Sat) but desaturated so the grid stays calm.
+ */
 export const Colors = {
   light: {
-    text: '#000000',
-    background: '#ffffff',
-    backgroundElement: '#F0F0F3',
-    backgroundSelected: '#E0E1E6',
-    textSecondary: '#60646C',
+    text: '#3B342B',
+    background: '#FBF8F3',
+    backgroundElement: '#F2EDE5',
+    backgroundSelected: '#E8E0D2',
+    textSecondary: '#8B8272',
+    accent: '#C67B5C',
+    accentSoft: '#F6E3D9',
+    danger: '#C05F5F',
+    holiday: '#C67878',
+    saturday: '#7B93B5',
   },
   dark: {
-    text: '#ffffff',
-    background: '#000000',
-    backgroundElement: '#212225',
-    backgroundSelected: '#2E3135',
-    textSecondary: '#B0B4BA',
+    text: '#EDE6DA',
+    background: '#181512',
+    backgroundElement: '#25211B',
+    backgroundSelected: '#332D24',
+    textSecondary: '#A89E8C',
+    accent: '#D99070',
+    accentSoft: '#3C2E25',
+    danger: '#D98A8A',
+    holiday: '#D99090',
+    saturday: '#93A8C8',
   },
 } as const;
 
@@ -57,6 +74,14 @@ export const Spacing = {
   four: 24,
   five: 32,
   six: 64,
+} as const;
+
+/** Corner radii. Cards default to `lg`; small chips/thumbnails use `sm`/`md`. */
+export const Radius = {
+  sm: 8,
+  md: 12,
+  lg: 16,
+  xl: 20,
 } as const;
 
 export const BottomTabInset = Platform.select({ ios: 50, android: 80 }) ?? 0;
