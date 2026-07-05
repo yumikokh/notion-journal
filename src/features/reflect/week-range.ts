@@ -43,6 +43,16 @@ export function shiftWeek(range: WeekRange, weeks: number): WeekRange {
   return getWeekRange(monday);
 }
 
+/**
+ * The `count` most recent weeks, oldest → newest, ending at the week
+ * containing `today`. Page order for the Reflect week pager (oldest on the
+ * left so swiping right moves back in time, matching the journal list).
+ */
+export function listRecentWeeks(today: Date, count: number): WeekRange[] {
+  const current = getWeekRange(today);
+  return Array.from({ length: count }, (_, i) => shiftWeek(current, i - (count - 1)));
+}
+
 /** Are two ranges the same week? Compare by `start` only — `end` is derived. */
 export function isSameWeek(a: WeekRange, b: WeekRange): boolean {
   return a.start === b.start;

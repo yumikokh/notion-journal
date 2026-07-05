@@ -4,6 +4,7 @@ import {
   formatWeekLabel,
   getWeekRange,
   isSameWeek,
+  listRecentWeeks,
   relativeWeekLabel,
   shiftWeek,
   weekElapsedDays,
@@ -98,6 +99,28 @@ describe('formatWeekLabel', () => {
   it('formats cross-month range', () => {
     expect(formatWeekLabel({ start: '2026-05-25', end: '2026-05-31' })).toBe('5/25 - 5/31');
     expect(formatWeekLabel({ start: '2026-06-01', end: '2026-06-07' })).toBe('6/1 - 6/7');
+  });
+});
+
+describe('listRecentWeeks', () => {
+  // 2026-06-05 is a Friday; its week starts Monday 2026-06-01.
+  const today = new Date(2026, 5, 5);
+
+  it('ends at the current week, oldest first', () => {
+    const weeks = listRecentWeeks(today, 3);
+    expect(weeks).toEqual([
+      { start: '2026-05-18', end: '2026-05-24' },
+      { start: '2026-05-25', end: '2026-05-31' },
+      { start: '2026-06-01', end: '2026-06-07' },
+    ]);
+  });
+
+  it('returns exactly `count` consecutive weeks', () => {
+    const weeks = listRecentWeeks(today, 10);
+    expect(weeks).toHaveLength(10);
+    for (let i = 1; i < weeks.length; i++) {
+      expect(weeks[i]).toEqual(shiftWeek(weeks[i - 1], 1));
+    }
   });
 });
 
