@@ -31,11 +31,19 @@ describe('calendar-prefs', () => {
     });
   });
 
-  it('defaults showDiary / showCover to false when missing from stored data', async () => {
+  it('falls back to the defaults (diary off, cover on) when missing from stored data', async () => {
     await AsyncStorage.setItem(KEY, JSON.stringify({ habitOverlay: ['Book'] }));
     const prefs = await loadCalendarPrefs();
     expect(prefs.showDiary).toBe(false);
-    expect(prefs.showCover).toBe(false);
+    expect(prefs.showCover).toBe(true);
+  });
+
+  it('respects an explicit showCover=false from stored data', async () => {
+    await AsyncStorage.setItem(
+      KEY,
+      JSON.stringify({ habitOverlay: [], showDiary: false, showCover: false }),
+    );
+    expect((await loadCalendarPrefs()).showCover).toBe(false);
   });
 
   it('keeps any string habit name from stored data (no allowlist)', async () => {

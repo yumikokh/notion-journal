@@ -8,8 +8,10 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
  * Names come from the server's dynamic checkbox enumeration — the app no
  * longer pins this list to a fixed 5-habit set.
  *
- * `showDiary` / `showCover` are experimental cell-content overrides:
- *   - showCover: render the Notion page cover as a tinted background of the cell.
+ * `showDiary` / `showCover` are cell-content overrides:
+ *   - showCover: render the Notion page cover as the cell background.
+ *     Defaults to ON — the photo-first calendar is the primary way entries
+ *     are browsed, so covers should show up without extra setup.
  *   - showDiary: render a small diary-text snippet inside the cell.
  * Both can be on simultaneously (diary text over cover).
  */
@@ -25,7 +27,7 @@ export type CalendarPrefs = {
 export const DEFAULT_PREFS: CalendarPrefs = {
   habitOverlay: [],
   showDiary: false,
-  showCover: false,
+  showCover: true,
 };
 
 function parse(raw: string | null): CalendarPrefs {
@@ -41,8 +43,8 @@ function parse(raw: string | null): CalendarPrefs {
       : [];
     return {
       habitOverlay: overlay,
-      showDiary: typeof obj.showDiary === 'boolean' ? obj.showDiary : false,
-      showCover: typeof obj.showCover === 'boolean' ? obj.showCover : false,
+      showDiary: typeof obj.showDiary === 'boolean' ? obj.showDiary : DEFAULT_PREFS.showDiary,
+      showCover: typeof obj.showCover === 'boolean' ? obj.showCover : DEFAULT_PREFS.showCover,
     };
   } catch {
     return DEFAULT_PREFS;

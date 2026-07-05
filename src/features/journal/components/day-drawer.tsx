@@ -354,30 +354,34 @@ function DayDrawerContent({
               <View
                 style={[
                   styles.errorBanner,
-                  { backgroundColor: theme.backgroundElement, marginHorizontal: Spacing.four },
+                  {
+                    backgroundColor: theme.backgroundElement,
+                    borderLeftColor: theme.danger,
+                    marginHorizontal: Spacing.four,
+                  },
                 ]}>
                 {entry.error && (
-                  <ThemedText type="small" style={styles.errorText}>
+                  <ThemedText type="small" style={[styles.errorText, { color: theme.danger }]}>
                     📥 読み込み: {entry.error.message}
                   </ThemedText>
                 )}
                 {saveAll.error && (
-                  <ThemedText type="small" style={styles.errorText}>
+                  <ThemedText type="small" style={[styles.errorText, { color: theme.danger }]}>
                     💾 保存: {saveAll.error.message}
                   </ThemedText>
                 )}
                 {uploadCover.error && (
-                  <ThemedText type="small" style={styles.errorText}>
+                  <ThemedText type="small" style={[styles.errorText, { color: theme.danger }]}>
                     🖼️ カバー: {uploadCover.error.message}
                   </ThemedText>
                 )}
                 {removeCover.error && (
-                  <ThemedText type="small" style={styles.errorText}>
+                  <ThemedText type="small" style={[styles.errorText, { color: theme.danger }]}>
                     🗑️ カバー削除: {removeCover.error.message}
                   </ThemedText>
                 )}
                 {ai.error && (
-                  <ThemedText type="small" style={styles.errorText}>
+                  <ThemedText type="small" style={[styles.errorText, { color: theme.danger }]}>
                     ✨ AI: {ai.error.message}
                   </ThemedText>
                 )}
@@ -599,7 +603,7 @@ function DayDrawerContent({
               </Pressable>
               <Pressable
                 onPress={overwriteServer}
-                style={[styles.conflictBtn, { backgroundColor: '#cc4444' }]}>
+                style={[styles.conflictBtn, { backgroundColor: theme.danger }]}>
                 <ThemedText type="smallBold" style={styles.conflictBtnDanger}>
                   上書き保存
                 </ThemedText>
@@ -778,9 +782,8 @@ const styles = StyleSheet.create({
     borderRadius: Spacing.two,
     gap: Spacing.one,
     borderLeftWidth: 3,
-    borderLeftColor: '#cc4444',
   },
-  errorText: { color: '#cc4444' },
+  errorText: {},
 
   conflictOverlay: {
     flex: 1,
