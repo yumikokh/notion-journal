@@ -138,7 +138,9 @@ export function JournalListScreen() {
       <SafeAreaView style={styles.safeArea} edges={['top']}>
         <View style={styles.header}>
         <Pressable
-          onPress={() => router.back()}
+          // Deep links can land here with an empty stack — fall back to the
+          // calendar tab instead of an unhandled GO_BACK.
+          onPress={() => (router.canGoBack() ? router.back() : router.replace('/(tabs)'))}
           accessibilityRole="button"
           accessibilityLabel="戻る"
           hitSlop={8}
