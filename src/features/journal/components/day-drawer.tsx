@@ -275,7 +275,11 @@ function DayDrawerContent({
       mediaTypes: 'images',
       quality: 0.7,
       base64: true,
-      allowsEditing: false,
+      // Native crop step after picking, so the user chooses which area of
+      // the photo becomes the cover (iOS pins the crop box to a square —
+      // a workable middle ground between the 16:9 drawer hero and the
+      // taller calendar cells, both of which contentFit="cover" from it).
+      allowsEditing: true,
     });
     if (result.canceled || !result.assets[0]) return;
     const asset = result.assets[0];
