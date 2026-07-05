@@ -136,14 +136,17 @@ export function ReflectScreen() {
             </View>
           ) : savedReflection ? (
             <>
-              <SavedReflection reflection={savedReflection} />
+              {/* Keyed by week so switching weeks remounts the component,
+                  cleanly resetting its edit/collapse state instead of
+                  syncing a prop change via an effect. */}
+              <SavedReflection key={range.start} reflection={savedReflection} />
               <Pressable
                 onPress={handleAnalyze}
                 style={({ pressed }) => [
                   styles.secondaryButton,
                   { borderColor: theme.text, opacity: pressed ? 0.6 : 1 },
                 ]}>
-                <ThemedText>もう一度分析する</ThemedText>
+                <ThemedText>AIにもう一度つくってもらう</ThemedText>
               </Pressable>
             </>
           ) : (
@@ -155,11 +158,11 @@ export function ReflectScreen() {
                   { backgroundColor: theme.text, opacity: pressed ? 0.7 : 1 },
                 ]}>
                 <ThemedText style={[styles.buttonText, { color: theme.background }]}>
-                  分析する
+                  AIにふりかえりをつくってもらう
                 </ThemedText>
               </Pressable>
               <ThemedText themeColor="textSecondary" type="small" style={styles.ctaHint}>
-                指定週の Daily を集約して AI に投げます。1回 数秒〜十数秒。
+                この週の記録をもとに、AIがやさしくふりかえりをつくります（数秒〜十数秒）。
               </ThemedText>
             </View>
           )
@@ -167,12 +170,12 @@ export function ReflectScreen() {
           <View style={styles.center}>
             <ActivityIndicator color={theme.text} />
             <ThemedText themeColor="textSecondary" type="small">
-              分析中…
+              AIがふりかえりをつくっています…
             </ThemedText>
           </View>
         ) : query.error ? (
-          <View style={styles.errorBox}>
-            <ThemedText style={{ color: '#d05545' }}>分析に失敗しました</ThemedText>
+          <View style={[styles.errorBox, { borderColor: theme.danger }]}>
+            <ThemedText style={{ color: theme.danger }}>うまくつくれませんでした</ThemedText>
             <ThemedText themeColor="textSecondary" type="small" selectable>
               {query.error.message}
             </ThemedText>
@@ -182,7 +185,7 @@ export function ReflectScreen() {
                 styles.secondaryButton,
                 { borderColor: theme.text, opacity: pressed ? 0.6 : 1 },
               ]}>
-              <ThemedText>もう一度試す</ThemedText>
+              <ThemedText>もう一度試してみる</ThemedText>
             </Pressable>
           </View>
         ) : query.data ? (
@@ -199,7 +202,7 @@ export function ReflectScreen() {
                 style={({ pressed }) => [
                   styles.button,
                   {
-                    backgroundColor: saveMutation.isSuccess ? '#22a06b' : theme.text,
+                    backgroundColor: saveMutation.isSuccess ? theme.accent : theme.text,
                     opacity: pressed || saveMutation.isPending ? 0.7 : 1,
                   },
                 ]}>
@@ -208,7 +211,7 @@ export function ReflectScreen() {
                     ? '保存中…'
                     : saveMutation.isSuccess
                       ? 'Notionに保存済み ✓'
-                      : 'Notionに保存'}
+                      : 'Notionに保存する'}
                 </ThemedText>
               </Pressable>
               <Pressable
@@ -217,11 +220,15 @@ export function ReflectScreen() {
                   styles.secondaryButton,
                   { borderColor: theme.text, opacity: pressed ? 0.6 : 1 },
                 ]}>
-                <ThemedText>再生成</ThemedText>
+                <ThemedText>つくり直す</ThemedText>
               </Pressable>
             </View>
             {saveMutation.error ? (
-              <ThemedText themeColor="textSecondary" type="small" style={styles.saveError} selectable>
+              <ThemedText
+                themeColor="textSecondary"
+                type="small"
+                style={[styles.saveError, { color: theme.danger }]}
+                selectable>
                 保存に失敗しました: {saveMutation.error.message}
               </ThemedText>
             ) : null}
@@ -271,7 +278,6 @@ const styles = StyleSheet.create({
     padding: Spacing.three,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#d05545',
   },
   secondaryButton: {
     alignSelf: 'center',
@@ -286,6 +292,5 @@ const styles = StyleSheet.create({
   },
   saveError: {
     textAlign: 'center',
-    color: '#d05545',
   },
 });

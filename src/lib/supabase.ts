@@ -136,9 +136,14 @@ export function invokeAiWeeklyAnalyze(payload: { weekStart: string; weekEnd: str
  * Read the weekly reflection (Notion "↩️ Reflection DB", Type=Weekly) for a
  * Monday→Sunday range. Returns the raw Notion page (or null); the caller maps
  * it via `notionPageToWeeklyReflection`.
+ *
+ * `bodyMarkdown` is the page body — the full saved AI analysis (#16). It is
+ * optional so the client keeps working against an older deployment of
+ * `notion-weekly-get` that doesn't return it yet; callers should fall back
+ * with `?? ''`.
  */
 export function invokeNotionWeeklyGet(payload: { weekStart: string; weekEnd: string }) {
-  return invoke<{ page: NotionPage | null }>('notion-weekly-get', payload);
+  return invoke<{ page: NotionPage | null; bodyMarkdown?: string }>('notion-weekly-get', payload);
 }
 
 /**

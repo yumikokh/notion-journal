@@ -1,5 +1,11 @@
 // GET a weekly reflection from the Notion "↩️ Reflection DB" for a week.
-// Returns: { page: NotionPage | null }
+// Returns: { page: NotionPage | null; bodyMarkdown: string }
+//
+// `bodyMarkdown` is the page body — the full saved AI weekly analysis
+// (summary + patterns + KPT + next focus, #16). The four rich_text
+// properties (good/problem/tryNext/nextGoal) are the user-owned
+// "conclusion"; the body is the AI's full report and the source of truth
+// for it, so edits made directly in Notion are reflected back in the app.
 //
 // The Reflection DB (a data source) holds KPT-style retrospectives shared
 // by Weekly and Monthly entries via its `Type` select:
@@ -62,7 +68,16 @@ Deno.serve(async (req) => {
       ],
     });
     const page = query.results?.[0] ?? null;
-    return json({ page });
+
+    // Read the page body too (the full saved analysis), so Notion edits to
+    // it are reflected in the app. The four properties alone can drift from
+    // the body since the body is the AI's full report.
+    let bodyMarkdown = '';
+    if (page) {
+      const md = await notion.getPageMarkdown(page.id);
+      bodyMarkdown = md.markdown ?? '';
+    }
+    return json({ page, bodyMarkdown });
   } catch (err) {
     if (err instanceof NotionError) {
       const status = err.status === 401 || err.status === 404 ? err.status : 502;

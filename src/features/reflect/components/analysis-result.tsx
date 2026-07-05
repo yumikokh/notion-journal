@@ -1,7 +1,7 @@
 import { StyleSheet, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
-import { Spacing } from '@/constants/theme';
+import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 
 import type { WeeklyAnalysis } from '../weekly-analysis';
@@ -86,20 +86,16 @@ function BulletList({ items }: { items: string[] }) {
 
 // Notion への保存は ReflectScreen の「Notionに保存」ボタンが担う（#16）。
 // テキストは `selectable` のままにして、個別の項目を長押しコピーもできる。
-const TONE_COLORS = {
-  keep: '#22a06b',
-  problem: '#d05545',
-  try: '#3c87f7',
-} as const;
-
-type KptTone = keyof typeof TONE_COLORS;
+type KptTone = 'keep' | 'problem' | 'try';
 
 function KptGroup({ label, items, tone }: { label: string; items: string[]; tone: KptTone }) {
   const theme = useTheme();
+  // Same gentle labeling as SavedReflection: soft accent chip, tinted text.
+  const toneColor = tone === 'problem' ? theme.danger : theme.accent;
   return (
     <View style={styles.kptGroup}>
-      <View style={[styles.kptLabel, { backgroundColor: TONE_COLORS[tone] }]}>
-        <ThemedText style={styles.kptLabelText}>{label}</ThemedText>
+      <View style={[styles.kptLabel, { backgroundColor: theme.accentSoft }]}>
+        <ThemedText style={[styles.kptLabelText, { color: toneColor }]}>{label}</ThemedText>
       </View>
       {items.length === 0 ? (
         <ThemedText themeColor="textSecondary" type="small">
@@ -153,10 +149,9 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
     paddingHorizontal: Spacing.two,
     paddingVertical: Spacing.half,
-    borderRadius: 4,
+    borderRadius: Radius.sm,
   },
   kptLabelText: {
-    color: '#ffffff',
     fontSize: 12,
     fontWeight: '700',
   },
@@ -165,6 +160,6 @@ const styles = StyleSheet.create({
   },
   kptCard: {
     padding: Spacing.three,
-    borderRadius: 8,
+    borderRadius: Radius.lg,
   },
 });
