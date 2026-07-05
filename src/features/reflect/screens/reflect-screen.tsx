@@ -16,6 +16,7 @@ import { isSupabaseEnvConfigured } from '@/lib/env';
 
 import { AnalysisResult } from '../components/analysis-result';
 import { SavedReflection } from '../components/saved-reflection';
+import { WeekInsights } from '../components/week-insights';
 import { WeekPicker } from '../components/week-picker';
 import { useSaveWeeklyAnalysis } from '../use-save-weekly-analysis';
 import { useWeeklyAnalysis } from '../use-weekly-analysis';
@@ -234,6 +235,10 @@ export function ReflectScreen() {
             ) : null}
           </>
         ) : null}
+
+        {/* The week's raw data sits under the reflection as its evidence:
+            the AI's observations gain credibility next to the actual line. */}
+        <WeekInsights range={range} today={today} />
       </ScrollView>
     </ScreenContainer>
   );

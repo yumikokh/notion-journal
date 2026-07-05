@@ -56,6 +56,21 @@ export function formatWeekLabel(range: WeekRange): string {
 }
 
 /**
+ * Elapsed days of the week as of `today` — the habit-rate denominator.
+ * Past weeks are complete (7); the current week counts Monday→today; a
+ * week that hasn't started yet is 0.
+ */
+export function weekElapsedDays(range: WeekRange, today: Date): number {
+  const [y, m, d] = range.start.split('-').map(Number);
+  const start = new Date(y, m - 1, d);
+  const day = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  if (day < start) return 0;
+  // Round to absorb DST shifts inside the week.
+  const elapsed = Math.round((day.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+  return Math.min(7, elapsed);
+}
+
+/**
  * "今週" / "先週" / null relative to `today`.
  * Returns null for any week further than 1 in the past or any future week.
  */

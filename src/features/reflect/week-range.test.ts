@@ -6,6 +6,7 @@ import {
   isSameWeek,
   relativeWeekLabel,
   shiftWeek,
+  weekElapsedDays,
 } from './week-range';
 
 describe('getWeekRange', () => {
@@ -97,6 +98,28 @@ describe('formatWeekLabel', () => {
   it('formats cross-month range', () => {
     expect(formatWeekLabel({ start: '2026-05-25', end: '2026-05-31' })).toBe('5/25 - 5/31');
     expect(formatWeekLabel({ start: '2026-06-01', end: '2026-06-07' })).toBe('6/1 - 6/7');
+  });
+});
+
+describe('weekElapsedDays', () => {
+  const week = { start: '2026-06-01', end: '2026-06-07' }; // Mon–Sun
+
+  it('returns 7 for a completed past week', () => {
+    expect(weekElapsedDays(week, new Date(2026, 5, 10))).toBe(7);
+  });
+
+  it('counts Monday→today for the current week', () => {
+    expect(weekElapsedDays(week, new Date(2026, 5, 1))).toBe(1); // Monday
+    expect(weekElapsedDays(week, new Date(2026, 5, 5))).toBe(5); // Friday
+    expect(weekElapsedDays(week, new Date(2026, 5, 7))).toBe(7); // Sunday
+  });
+
+  it('returns 0 for a week that has not started', () => {
+    expect(weekElapsedDays(week, new Date(2026, 4, 31))).toBe(0);
+  });
+
+  it('ignores the time of day', () => {
+    expect(weekElapsedDays(week, new Date(2026, 5, 5, 23, 59))).toBe(5);
   });
 });
 

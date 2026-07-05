@@ -1,13 +1,10 @@
 import { describe, expect, it } from '@jest/globals';
 
 import {
-  aggregateInsights,
+  buildDailyTrend,
   buildHabitRates,
-  buildMonthlyTrend,
-  buildWeeklyTrend,
   computeStreak,
   feelingToScore,
-  monthsToFetch,
   type DayRecord,
 } from './insights';
 
@@ -43,62 +40,43 @@ describe('feelingToScore', () => {
   });
 });
 
-describe('buildWeeklyTrend', () => {
-  it('produces one bucket per week, newest last', () => {
-    const trend = buildWeeklyTrend([], TODAY, 6);
-    expect(trend).toHaveLength(6);
-    // The last bucket is the current week (Monday 2026-06-01).
-    expect(trend[5].key).toBe('2026-06-01');
-    expect(trend[5].label).toBe('6/1');
-    // The first bucket is 5 weeks earlier.
-    expect(trend[0].key).toBe('2026-04-27');
+describe('buildDailyTrend', () => {
+  it('produces one point per day with weekday labels, Monday first', () => {
+    const trend = buildDailyTrend([], '2026-06-01', '2026-06-07');
+    expect(trend).toHaveLength(7);
+    expect(trend.map((p) => p.key)).toEqual([
+      '2026-06-01',
+      '2026-06-02',
+      '2026-06-03',
+      '2026-06-04',
+      '2026-06-05',
+      '2026-06-06',
+      '2026-06-07',
+    ]);
+    expect(trend.map((p) => p.label)).toEqual(['月', '火', '水', '木', '金', '土', '日']);
   });
 
-  it('averages feeling scores within a week and leaves empty weeks null', () => {
+  it('maps recorded feelings onto their day and leaves gaps null', () => {
     const records = [
       day('2026-06-01', '(^^)'), // 5
-      day('2026-06-03', '(- -)'), // 3  → current-week avg = 4
-      day('2026-05-26', '(TT)'), // 2  → previous week (Mon 5/25)
+      day('2026-06-03', '(- -)'), // 3
+      day('2026-06-04', null, { output: true }), // habit only → no score
     ];
-    const trend = buildWeeklyTrend(records, TODAY, 6);
-    const current = trend[5];
-    const previous = trend[4];
-    expect(current.score).toBe(4);
-    expect(current.count).toBe(2);
-    expect(previous.score).toBe(2);
-    expect(previous.count).toBe(1);
-    // A week with no records stays null.
-    expect(trend[0].score).toBeNull();
-    expect(trend[0].count).toBe(0);
+    const trend = buildDailyTrend(records, '2026-06-01', '2026-06-07');
+    expect(trend[0]).toMatchObject({ score: 5, count: 1 });
+    expect(trend[1]).toMatchObject({ score: null, count: 0 });
+    expect(trend[2]).toMatchObject({ score: 3, count: 1 });
+    expect(trend[3]).toMatchObject({ score: null, count: 0 });
   });
 
-  it('ignores records whose feeling is null', () => {
-    const records = [day('2026-06-01', null, { output: true }), day('2026-06-02', '(^^)')];
-    const current = buildWeeklyTrend(records, TODAY, 6)[5];
-    expect(current.count).toBe(1);
-    expect(current.score).toBe(5);
-  });
-});
-
-describe('buildMonthlyTrend', () => {
-  it('produces one bucket per month, newest last', () => {
-    const trend = buildMonthlyTrend([], TODAY, 6);
-    expect(trend).toHaveLength(6);
-    expect(trend[5].key).toBe('2026-06');
-    expect(trend[5].label).toBe('6月');
-    expect(trend[0].key).toBe('2026-01');
+  it('ignores records outside the range', () => {
+    const records = [day('2026-05-31', '(^^)'), day('2026-06-08', '(^^)')];
+    const trend = buildDailyTrend(records, '2026-06-01', '2026-06-07');
+    expect(trend.every((p) => p.score === null)).toBe(true);
   });
 
-  it('averages by calendar month', () => {
-    const records = [
-      day('2026-06-01', '(^^)'), // 5
-      day('2026-06-20', '(- -)'), // 3 → June avg 4
-      day('2026-05-10', '(TT)'), // 2 → May
-    ];
-    const trend = buildMonthlyTrend(records, TODAY, 6);
-    expect(trend[5].score).toBe(4);
-    expect(trend[5].count).toBe(2);
-    expect(trend[4].score).toBe(2);
+  it('returns an empty list when end is before start', () => {
+    expect(buildDailyTrend([], '2026-06-07', '2026-06-01')).toEqual([]);
   });
 });
 
@@ -170,70 +148,5 @@ describe('computeStreak', () => {
   it('handles an empty set', () => {
     const streak = computeStreak([], TODAY);
     expect(streak).toEqual({ current: 0, longest: 0, recordedToday: false });
-  });
-});
-
-describe('monthsToFetch', () => {
-  it('returns the last 6 calendar months for the month period', () => {
-    expect(monthsToFetch('month', TODAY)).toEqual([
-      '2026-01',
-      '2026-02',
-      '2026-03',
-      '2026-04',
-      '2026-05',
-      '2026-06',
-    ]);
-  });
-
-  it('covers every month touched by the 6-week window', () => {
-    // Oldest Monday = 2026-06-01 − 5 weeks = 2026-04-27, so April–June.
-    expect(monthsToFetch('week', TODAY)).toEqual(['2026-04', '2026-05', '2026-06']);
-  });
-});
-
-describe('aggregateInsights', () => {
-  const records = [
-    day('2026-06-01', '(^^)', { output: true }),
-    day('2026-06-04', '(- -)', { output: true, book: true }),
-    day('2026-06-05', '(˙-˙)', { output: true }),
-  ];
-
-  it('builds weekly trend and current-week habit rates', () => {
-    const data = aggregateInsights('week', records, TODAY);
-    expect(data.period).toBe('week');
-    expect(data.trend).toHaveLength(6);
-    expect(data.recordedDays).toBe(3);
-    // Current week (Mon 6/1 .. Fri 6/5) → 5 elapsed days.
-    const output = data.habitRates.find((r) => r.key === 'output')!;
-    expect(output.total).toBe(5);
-    expect(output.checked).toBe(3);
-    expect(output.rate).toBeCloseTo(0.6);
-  });
-
-  it('uses day-of-month as the denominator for the month period', () => {
-    const data = aggregateInsights('month', records, TODAY);
-    const output = data.habitRates.find((r) => r.key === 'output')!;
-    expect(output.total).toBe(5); // June 5th
-    expect(output.checked).toBe(3);
-  });
-
-  it('exposes the habit window range per period', () => {
-    const week = aggregateInsights('week', records, TODAY);
-    // Current week: Monday 6/1 → today 6/5.
-    expect(week.habitWindow).toEqual({ start: '2026-06-01', end: '2026-06-05', days: 5 });
-
-    const month = aggregateInsights('month', records, TODAY);
-    // Current month: 6/1 → today 6/5.
-    expect(month.habitWindow).toEqual({ start: '2026-06-01', end: '2026-06-05', days: 5 });
-  });
-
-  it('reports the last 7 days as recorded flags ending today', () => {
-    const data = aggregateInsights('week', records, TODAY);
-    // index 6 = today (6/5, recorded), index 5 = 6/4 (recorded), index 3 = 6/2 (no)
-    expect(data.last7Recorded).toHaveLength(7);
-    expect(data.last7Recorded[6]).toBe(true);
-    expect(data.last7Recorded[5]).toBe(true);
-    expect(data.last7Recorded[3]).toBe(false);
-    expect(data.streak.current).toBe(2); // 6/4 + 6/5
   });
 });

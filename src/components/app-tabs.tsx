@@ -3,7 +3,7 @@ import { useColorScheme } from 'react-native';
 
 import { Colors } from '@/constants/theme';
 
-/** Bottom tab bar: 日記 / ふりかえり / Insights / 設定. */
+/** Bottom tab bar: 日記 / ふりかえり / 設定. */
 export default function AppTabs() {
   const scheme = useColorScheme();
   const colors = Colors[scheme === 'dark' ? 'dark' : 'light'];
@@ -21,11 +21,6 @@ export default function AppTabs() {
       <NativeTabs.Trigger name="reflect">
         <NativeTabs.Trigger.Icon sf="bubble.left.and.bubble.right.fill" />
         <NativeTabs.Trigger.Label>ふりかえり</NativeTabs.Trigger.Label>
-      </NativeTabs.Trigger>
-
-      <NativeTabs.Trigger name="insights">
-        <NativeTabs.Trigger.Icon sf="chart.line.uptrend.xyaxis" />
-        <NativeTabs.Trigger.Label>Insights</NativeTabs.Trigger.Label>
       </NativeTabs.Trigger>
 
       <NativeTabs.Trigger name="settings">

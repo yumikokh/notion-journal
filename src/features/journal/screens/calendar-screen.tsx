@@ -16,6 +16,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { BottomTabInset, Radius, Spacing } from '@/constants/theme';
+import { computeStreak } from '@/features/insights/insights';
 import { buildMonthWeeks, type MonthCell } from '@/features/journal/build-month-grid';
 import {
   DEFAULT_PREFS,
@@ -35,7 +36,6 @@ import {
   habitIcon,
 } from '@/features/journal/habit-icons';
 import { useMonthEntries } from '@/features/journal/use-month-entries';
-import { computeStreak } from '@/features/insights/insights';
 import { notionChipColor } from '@/features/notion/colors';
 import { useTheme } from '@/hooks/use-theme';
 import { toDateKey } from '@/lib/date';
@@ -115,6 +115,17 @@ export function CalendarScreen() {
    */
   const currentYearMonth = months[currentMonthIndex].key;
   const currentEntries = useMonthEntries(currentYearMonth, { enabled: envOk });
+
+  // Streak chip in the header. Two months of history cover any realistic
+  // current run while reusing the calendar's own month cache; a streak
+  // longer than that would display capped rather than fetching more.
+  const prevEntries = useMonthEntries(months[currentMonthIndex - 1].key, { enabled: envOk });
+  const streak = useMemo(() => {
+    const dates = [...(prevEntries.data ?? []), ...(currentEntries.data ?? [])].map(
+      (e: MonthEntry) => e.date,
+    );
+    return computeStreak(dates, today);
+  }, [prevEntries.data, currentEntries.data, today]);
 
   const feelingColorMap = useMemo(() => {
     const m: Partial<Record<Feeling, NotionSelectColor | null>> = {};
@@ -266,6 +277,20 @@ export function CalendarScreen() {
             {visibleMonth.year}年{visibleMonth.month + 1}月
           </ThemedText>
           <View style={styles.headerActions}>
+            {streak.current > 0 && (
+              <View
+                accessibilityLabel={`連続記録 ${streak.current}日`}
+                style={[
+                  styles.streakChip,
+                  { backgroundColor: notionChipColor('orange', scheme).background },
+                ]}>
+                <ThemedText
+                  type="smallBold"
+                  style={{ color: notionChipColor('orange', scheme).text }}>
+                  🔥{streak.current}
+                </ThemedText>
+              </View>
+            )}
             {visibleIndex !== currentMonthIndex && (
               <Pressable
                 onPress={scrollToToday}
@@ -453,6 +478,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.two,
+  },
+  streakChip: {
+    paddingHorizontal: Spacing.two,
+    height: 32,
+    borderRadius: Radius.lg,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   todayBtn: {
     paddingHorizontal: Spacing.three,
