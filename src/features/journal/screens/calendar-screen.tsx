@@ -4,11 +4,14 @@ import { LayoutList, SlidersHorizontal } from 'lucide-react-native';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   FlatList,
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   Pressable,
   RefreshControl,
   StyleSheet,
   Switch,
+  TextInput,
   View,
   useColorScheme,
   type ViewToken,
@@ -22,8 +25,12 @@ import { computeStreak } from '@/features/insights/insights';
 import { buildMonthWeeks, type MonthCell } from '@/features/journal/build-month-grid';
 import {
   DEFAULT_PREFS,
+  MAX_MODES,
   activeViewMode,
+  addMode,
   loadCalendarPrefs,
+  removeMode,
+  renameMode,
   saveCalendarPrefs,
   type CalendarPrefs,
   type CalendarViewMode,
@@ -398,42 +405,78 @@ export function CalendarScreen() {
         transparent
         animationType="slide"
         onRequestClose={() => setModeSheetOpen(false)}>
-        <Pressable
-          style={styles.sheetOverlay}
-          accessibilityLabel="表示モードの設定を閉じる"
-          onPress={() => setModeSheetOpen(false)}>
+        <KeyboardAvoidingView
+          style={styles.sheetFlex}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
           <Pressable
-            style={[styles.sheet, { backgroundColor: theme.background }]}
-            onPress={(e) => e.stopPropagation()}>
-            <ThemedText type="smallBold" themeColor="textSecondary">
-              カレンダーの表示モード
-            </ThemedText>
+            style={styles.sheetOverlay}
+            accessibilityLabel="表示モードの設定を閉じる"
+            onPress={() => setModeSheetOpen(false)}>
+            <Pressable
+              style={[styles.sheet, { backgroundColor: theme.background }]}
+              onPress={(e) => e.stopPropagation()}>
+              <ThemedText type="smallBold" themeColor="textSecondary">
+                カレンダーの表示モード
+              </ThemedText>
 
-            <View style={styles.modeChipRow}>
-              {prefs.modes.map((m, i) => {
-                const selected = i === prefs.activeMode;
-                return (
+              <View style={styles.modeChipRow}>
+                {prefs.modes.map((m, i) => {
+                  const selected = i === prefs.activeMode;
+                  return (
+                    <Pressable
+                      key={i}
+                      onPress={() => setActiveMode(i)}
+                      accessibilityRole="button"
+                      accessibilityState={{ selected }}
+                      style={[
+                        styles.modeChip,
+                        {
+                          backgroundColor: selected
+                            ? theme.accentSoft
+                            : theme.backgroundElement,
+                        },
+                      ]}>
+                      <ThemedText
+                        type="smallBold"
+                        style={{ color: selected ? theme.accent : theme.textSecondary }}>
+                        {m.label}
+                      </ThemedText>
+                    </Pressable>
+                  );
+                })}
+                {prefs.modes.length < MAX_MODES && (
                   <Pressable
-                    key={m.key}
-                    onPress={() => setActiveMode(i)}
+                    onPress={() => updatePrefs(addMode)}
                     accessibilityRole="button"
-                    accessibilityState={{ selected }}
-                    style={[
-                      styles.modeChip,
-                      { backgroundColor: selected ? theme.accentSoft : theme.backgroundElement },
-                    ]}>
-                    <ThemedText
-                      type="smallBold"
-                      style={{ color: selected ? theme.accent : theme.textSecondary }}>
-                      {m.label}
+                    accessibilityLabel="表示モードを追加"
+                    style={[styles.modeChip, { backgroundColor: theme.backgroundElement }]}>
+                    <ThemedText type="smallBold" themeColor="textSecondary">
+                      ＋
                     </ThemedText>
                   </Pressable>
-                );
-              })}
+                )}
+              </View>
+
+            <View style={styles.settingRow}>
+              <ThemedText type="small" themeColor="textSecondary">
+                モード名
+              </ThemedText>
+              <TextInput
+                value={viewMode.label}
+                onChangeText={(text) =>
+                  updatePrefs((prev) => renameMode(prev, prev.activeMode, text))
+                }
+                placeholder="モード名"
+                placeholderTextColor={theme.textSecondary}
+                style={[
+                  styles.modeNameInput,
+                  { color: theme.text, backgroundColor: theme.backgroundElement },
+                ]}
+              />
             </View>
 
             <ThemedText type="small" themeColor="textSecondary">
-              「{viewMode.label}」モードで表示するもの
+              このモードで表示するもの
             </ThemedText>
 
             <View style={styles.settingRow}>
@@ -519,8 +562,20 @@ export function CalendarScreen() {
                 );
               })}
             </View>
+
+            {prefs.modes.length > 1 && (
+              <Pressable
+                onPress={() => updatePrefs((prev) => removeMode(prev, prev.activeMode))}
+                accessibilityRole="button"
+                style={styles.deleteModeBtn}>
+                <ThemedText type="small" style={{ color: theme.danger }}>
+                  このモードを削除
+                </ThemedText>
+              </Pressable>
+            )}
+            </Pressable>
           </Pressable>
-        </Pressable>
+        </KeyboardAvoidingView>
       </Modal>
 
       <DayDrawer date={drawerDate} onClose={closeDrawer} feelingColors={feelingColorMap} />
@@ -579,6 +634,9 @@ const styles = StyleSheet.create({
     height: 32,
     borderRadius: Radius.lg,
   },
+  sheetFlex: {
+    flex: 1,
+  },
   sheetOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.35)',
@@ -593,13 +651,27 @@ const styles = StyleSheet.create({
   },
   modeChipRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: Spacing.two,
   },
   modeChip: {
-    flex: 1,
     alignItems: 'center',
     paddingVertical: Spacing.two + 2,
+    paddingHorizontal: Spacing.three,
+    minWidth: 64,
     borderRadius: Radius.lg,
+  },
+  modeNameInput: {
+    minWidth: 160,
+    paddingHorizontal: Spacing.three,
+    paddingVertical: Spacing.one + 2,
+    borderRadius: Radius.md,
+    fontSize: 15,
+  },
+  deleteModeBtn: {
+    alignSelf: 'center',
+    paddingVertical: Spacing.one,
+    paddingHorizontal: Spacing.three,
   },
   settingRow: {
     flexDirection: 'row',
