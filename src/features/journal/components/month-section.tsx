@@ -69,7 +69,9 @@ export const MonthSection = memo(function MonthSection({
   return (
     <View style={{ height: monthSectionHeight(weeks.length, cellHeight) }}>
       <View style={styles.monthHeader}>
-        <ThemedText type="subtitle">
+        {/* Quieter than the screen's fixed header (which tracks the visible
+            month) so the two don't read as a duplicated title. */}
+        <ThemedText type="smallBold" themeColor="textSecondary">
           {year}年{month + 1}月
         </ThemedText>
         {enabled && entries.isLoading && (
