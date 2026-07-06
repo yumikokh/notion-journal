@@ -1,3 +1,5 @@
+import { useRouter } from 'expo-router';
+import { ChevronLeft } from 'lucide-react-native';
 import { useEffect, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 
@@ -15,6 +17,7 @@ import { useTheme } from '@/hooks/use-theme';
 
 export function SettingsScreen() {
   const theme = useTheme();
+  const router = useRouter();
   const [prompt, setPrompt] = useState('');
   const [loaded, setLoaded] = useState<string>(''); // last persisted value
 
@@ -57,7 +60,17 @@ export function SettingsScreen() {
         keyboardDismissMode="interactive"
         automaticallyAdjustKeyboardInsets
         showsVerticalScrollIndicator={false}>
-        <ThemedText type="subtitle">設定</ThemedText>
+        {/* Pushed from the Today header (no tab slot) — bring your own back. */}
+        <View style={styles.headerRow}>
+          <Pressable
+            onPress={() => (router.canGoBack() ? router.back() : router.replace('/'))}
+            accessibilityRole="button"
+            accessibilityLabel="戻る"
+            hitSlop={8}>
+            <ChevronLeft size={24} color={theme.text} strokeWidth={2} />
+          </Pressable>
+          <ThemedText type="subtitle">設定</ThemedText>
+        </View>
 
         <ReminderSection />
 
@@ -122,6 +135,11 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.four,
     paddingBottom: BottomTabInset + Spacing.four,
     gap: Spacing.four,
+  },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.two,
   },
   section: {
     gap: Spacing.two,

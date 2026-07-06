@@ -45,4 +45,29 @@ describe('parseTodayLogs', () => {
   it('returns empty for an empty body', () => {
     expect(parseTodayLogs('')).toEqual([]);
   });
+
+  it('drops raw embed tags (e.g. Notion video bookmarks) from a fragment', () => {
+    const body = [
+      '**15:04** あああ',
+      '- 👍 動画のタイトル',
+      '    <video src="https://www.youtube.com/watch?v=xxx"></video>',
+      '',
+    ].join('\n');
+    expect(parseTodayLogs(body)).toEqual([{ time: '15:04', text: 'あああ\n- 👍 動画のタイトル' }]);
+  });
+
+  it('drops Notion pseudo tags and stops the fragment there (Notion-side edits)', () => {
+    const body = [
+      '**14:43** Test',
+      'Progrit 面談おわた〜〜',
+      '<empty-block/>',
+      'ほほほ',
+      '',
+      '**15:04** あああ',
+    ].join('\n');
+    expect(parseTodayLogs(body)).toEqual([
+      { time: '14:43', text: 'Test\nProgrit 面談おわた〜〜' },
+      { time: '15:04', text: 'あああ' },
+    ]);
+  });
 });

@@ -3,7 +3,11 @@ import { useColorScheme } from 'react-native';
 
 import { Colors } from '@/constants/theme';
 
-/** Bottom tab bar: today / カレンダー / ふりかえり / 設定. */
+/**
+ * Bottom tab bar: Today / カレンダー / ふりかえり.
+ * 設定 has no tab slot — it's visited rarely (setup, notifications,
+ * integrations), so it lives behind the gear on the Today header.
+ */
 export default function AppTabs() {
   const scheme = useColorScheme();
   const colors = Colors[scheme === 'dark' ? 'dark' : 'light'];
@@ -16,7 +20,7 @@ export default function AppTabs() {
       {/* Capture-first: index (the launch tab) is the quick-log surface. */}
       <NativeTabs.Trigger name="index">
         <NativeTabs.Trigger.Icon sf="square.and.pencil" />
-        <NativeTabs.Trigger.Label>today</NativeTabs.Trigger.Label>
+        <NativeTabs.Trigger.Label>Today</NativeTabs.Trigger.Label>
       </NativeTabs.Trigger>
 
       <NativeTabs.Trigger name="calendar">
@@ -29,10 +33,6 @@ export default function AppTabs() {
         <NativeTabs.Trigger.Label>ふりかえり</NativeTabs.Trigger.Label>
       </NativeTabs.Trigger>
 
-      <NativeTabs.Trigger name="settings">
-        <NativeTabs.Trigger.Icon sf="gearshape.fill" />
-        <NativeTabs.Trigger.Label>設定</NativeTabs.Trigger.Label>
-      </NativeTabs.Trigger>
     </NativeTabs>
   );
 }

@@ -19,6 +19,14 @@ export type TodayLog = {
 };
 
 const LOG_MARKER = /^\*\*(\d{1,2}:\d{2})\*\*\s?(.*)$/;
+/**
+ * Notion's markdown export renders non-text blocks as raw HTML-ish lines —
+ * `<empty-block/>`, `<video src="…"></video>`, … — and free-form editing
+ * on the Notion side sprinkles these in. They never read well in the
+ * timeline; treat any pure-tag line like a blank line (fragment
+ * terminator), keeping only the human-written text.
+ */
+const PSEUDO_TAG = /^<.*>$/;
 
 /** Format a Date as the HH:MM label used in log lines. */
 export function formatTimeLabel(date: Date): string {
@@ -46,7 +54,7 @@ export function parseTodayLogs(bodyMarkdown: string): TodayLog[] {
       logs.push(open);
       continue;
     }
-    if (line.trim() === '') {
+    if (line.trim() === '' || PSEUDO_TAG.test(line.trim())) {
       open = null;
       continue;
     }

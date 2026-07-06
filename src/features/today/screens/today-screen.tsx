@@ -1,12 +1,16 @@
-import { ArrowUp, Sparkles } from 'lucide-react-native';
+import { useQueryClient } from '@tanstack/react-query';
+import { useRouter } from 'expo-router';
+import { ArrowUp, RotateCw, Settings, Sparkles } from 'lucide-react-native';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   FlatList,
   Keyboard,
   KeyboardAvoidingView,
   Platform,
   Pressable,
+  RefreshControl,
   StyleSheet,
   TextInput,
   View,
@@ -16,11 +20,14 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { BottomTabInset, Radius, Spacing } from '@/constants/theme';
+import { buildDayCalendarContext } from '@/features/calendar/calendar-context';
+import { useDayEvents } from '@/features/calendar/use-day-events';
 import { DayDrawer } from '@/features/journal/components/day-drawer';
 import { FEELINGS, type Feeling } from '@/features/journal/draft';
 import { useMonthEntries } from '@/features/journal/use-month-entries';
 import { useTodayEntry } from '@/features/journal/use-today-entry';
 import { useAppendLog } from '@/features/today/use-append-log';
+import { useSummarizeDay } from '@/features/today/use-summarize-day';
 import { formatTimeLabel, parseTodayLogs, type TodayLog } from '@/features/today/today-log';
 import { useTheme } from '@/hooks/use-theme';
 import { toDateKey } from '@/lib/date';
@@ -53,6 +60,47 @@ export function TodayScreen() {
     () => parseTodayLogs(entry.data?.bodyMarkdown ?? ''),
     [entry.data?.bodyMarkdown],
   );
+
+  // One-tap まとめる: AI-summarize the accumulated body straight into the
+  // DIARY property. Calendar events (when connected) ride along as context.
+  const router = useRouter();
+  const queryClient = useQueryClient();
+  const dayEvents = useDayEvents(todayKey);
+  const summarize = useSummarizeDay(todayKey);
+  const bodyMarkdown = entry.data?.bodyMarkdown ?? '';
+  const canSummarize = envOk && bodyMarkdown.trim().length > 0 && !summarize.isPending;
+  const runSummarize = useCallback(() => {
+    if (!canSummarize) return;
+    const start = () =>
+      summarize.mutate({
+        bodyMarkdown,
+        notionPageId: entry.data?.notionPageId ?? null,
+        calendarContext: buildDayCalendarContext(dayEvents.data ?? []) || undefined,
+      });
+    if ((entry.data?.diary ?? '').trim().length > 0) {
+      Alert.alert('DIARY を書き直しますか？', '今日の DIARY をAIがまとめ直して上書きします。', [
+        { text: 'キャンセル', style: 'cancel' },
+        { text: 'まとめ直す', onPress: start },
+      ]);
+      return;
+    }
+    start();
+  }, [canSummarize, summarize, bodyMarkdown, entry.data, dayEvents.data]);
+
+  // Explicit refresh: today's entry + this month (feeds the DIARY card,
+  // timeline, and the calendar behind it).
+  const [refreshing, setRefreshing] = useState(false);
+  const refresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['journal', 'today', todayKey] }),
+        queryClient.invalidateQueries({ queryKey: ['journal', 'month', todayKey.slice(0, 7)] }),
+      ]);
+    } finally {
+      setRefreshing(false);
+    }
+  }, [queryClient, todayKey]);
 
   const [text, setText] = useState('');
   const listRef = useRef<FlatList<TodayLog>>(null);
@@ -124,22 +172,78 @@ export function TodayScreen() {
           keyboardVerticalOffset={0}>
           <View style={styles.header}>
             <View style={styles.headerTitleGroup}>
-              <ThemedText type="subtitle">today</ThemedText>
+              <ThemedText type="subtitle">Today</ThemedText>
               <ThemedText type="small" themeColor="textSecondary">
                 {dateLabel}
               </ThemedText>
             </View>
+            <View style={styles.headerActions}>
+              <Pressable
+                onPress={refresh}
+                disabled={refreshing}
+                accessibilityRole="button"
+                accessibilityLabel="最新のデータに更新"
+                style={[styles.iconBtn, { backgroundColor: theme.backgroundElement }]}>
+                {refreshing ? (
+                  <ActivityIndicator size="small" color={theme.textSecondary} />
+                ) : (
+                  <RotateCw size={16} color={theme.textSecondary} strokeWidth={1.8} />
+                )}
+              </Pressable>
+              <Pressable
+                onPress={() => router.push('/settings')}
+                accessibilityRole="button"
+                accessibilityLabel="設定"
+                style={[styles.iconBtn, { backgroundColor: theme.backgroundElement }]}>
+                <Settings size={16} color={theme.textSecondary} strokeWidth={1.8} />
+              </Pressable>
+              <Pressable
+                onPress={runSummarize}
+                disabled={!canSummarize}
+                accessibilityRole="button"
+                accessibilityLabel="今日のログをAIでまとめる"
+                style={[
+                  styles.summarizeBtn,
+                  { backgroundColor: theme.accentSoft, opacity: canSummarize ? 1 : 0.5 },
+                ]}>
+                {summarize.isPending ? (
+                  <ActivityIndicator size="small" color={theme.accent} />
+                ) : (
+                  <Sparkles size={14} color={theme.accent} strokeWidth={2} />
+                )}
+                <ThemedText type="smallBold" style={{ color: theme.accent }}>
+                  {summarize.isPending ? 'まとめ中…' : 'まとめる'}
+                </ThemedText>
+              </Pressable>
+            </View>
+          </View>
+
+          {summarize.error ? (
+            <ThemedText type="small" style={[styles.sendError, { color: theme.danger }]}>
+              まとめられませんでした: {summarize.error.message}
+            </ThemedText>
+          ) : null}
+
+          {(entry.data?.diary ?? '').trim().length > 0 && (
             <Pressable
               onPress={() => setDrawerDate(todayKey)}
               accessibilityRole="button"
-              accessibilityLabel="今日をまとめる"
-              style={[styles.summarizeBtn, { backgroundColor: theme.accentSoft }]}>
-              <Sparkles size={14} color={theme.accent} strokeWidth={2} />
-              <ThemedText type="smallBold" style={{ color: theme.accent }}>
-                まとめる
+              accessibilityLabel="今日のDIARYを開く"
+              style={({ pressed }) => [
+                styles.diaryCard,
+                { backgroundColor: theme.accentSoft, opacity: pressed ? 0.8 : 1 },
+              ]}>
+              <View style={styles.diaryCardHeader}>
+                <Sparkles size={13} color={theme.accent} strokeWidth={2} />
+                <ThemedText type="smallBold" style={{ color: theme.accent }}>
+                  今日の DIARY
+                </ThemedText>
+              </View>
+              <ThemedText selectable style={styles.logText}>
+                {entry.data?.diary}
               </ThemedText>
             </Pressable>
-          </View>
+          )}
 
           <FlatList
             ref={listRef}
@@ -149,6 +253,15 @@ export function TodayScreen() {
             showsVerticalScrollIndicator={false}
             contentContainerStyle={styles.listContent}
             onContentSizeChange={() => listRef.current?.scrollToEnd({ animated: false })}
+            refreshControl={
+              envOk ? (
+                <RefreshControl
+                  refreshing={refreshing}
+                  onRefresh={refresh}
+                  tintColor={theme.textSecondary}
+                />
+              ) : undefined
+            }
             ListEmptyComponent={
               !envOk ? (
                 <ThemedText type="small" themeColor="textSecondary" style={styles.emptyText}>
@@ -245,6 +358,30 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'baseline',
     gap: Spacing.two,
+  },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.two,
+  },
+  iconBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  diaryCard: {
+    marginHorizontal: Spacing.four,
+    marginBottom: Spacing.two,
+    padding: Spacing.three,
+    borderRadius: Radius.lg,
+    gap: Spacing.one,
+  },
+  diaryCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.one,
   },
   summarizeBtn: {
     flexDirection: 'row',

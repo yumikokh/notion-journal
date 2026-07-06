@@ -1,8 +1,9 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { LayoutList, SlidersHorizontal } from 'lucide-react-native';
+import { LayoutList, RotateCw, SlidersHorizontal } from 'lucide-react-native';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  ActivityIndicator,
   Animated,
   FlatList,
   KeyboardAvoidingView,
@@ -336,6 +337,18 @@ export function CalendarScreen() {
                 </ThemedText>
               </Pressable>
             )}
+            <Pressable
+              onPress={onRefresh}
+              disabled={refreshing}
+              accessibilityRole="button"
+              accessibilityLabel="最新のデータに更新"
+              style={[styles.actionBtn, { backgroundColor: theme.backgroundElement }]}>
+              {refreshing ? (
+                <ActivityIndicator size="small" color={theme.textSecondary} />
+              ) : (
+                <RotateCw size={16} color={theme.textSecondary} strokeWidth={1.8} />
+              )}
+            </Pressable>
             <Pressable
               onPress={() => router.push('/journal-list')}
               accessibilityRole="button"
