@@ -142,7 +142,7 @@ export function JournalListScreen() {
         <Pressable
           // Deep links can land here with an empty stack — fall back to the
           // calendar tab instead of an unhandled GO_BACK.
-          onPress={() => (router.canGoBack() ? router.back() : router.replace('/(tabs)'))}
+          onPress={() => (router.canGoBack() ? router.back() : router.replace('/calendar'))}
           accessibilityRole="button"
           accessibilityLabel="戻る"
           hitSlop={8}

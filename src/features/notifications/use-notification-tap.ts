@@ -50,9 +50,9 @@ export function useNotificationTap(): void {
     let cancelled = false;
 
     const openForDate = (dateKey: string) => {
-      // Calendar tab lives at `/(tabs)/index`. Navigating to '/' targets
-      // the same route in Expo Router's tab layout.
-      router.navigate({ pathname: '/', params: { date: dateKey } });
+      // The calendar tab (which consumes `?date=` by opening that day's
+      // drawer) lives at `/(tabs)/calendar` — index is the きょう tab.
+      router.navigate({ pathname: '/calendar', params: { date: dateKey } });
     };
 
     // Cold start: was the app launched by tapping a reminder?

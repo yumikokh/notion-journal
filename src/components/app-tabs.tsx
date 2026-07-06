@@ -13,13 +13,13 @@ export default function AppTabs() {
       backgroundColor={colors.background}
       indicatorColor={colors.backgroundElement}
       labelStyle={{ selected: { color: colors.text } }}>
-      {/* Capture-first: the app opens on the quick-log surface. */}
-      <NativeTabs.Trigger name="today">
+      {/* Capture-first: index (the launch tab) is the quick-log surface. */}
+      <NativeTabs.Trigger name="index">
         <NativeTabs.Trigger.Icon sf="square.and.pencil" />
         <NativeTabs.Trigger.Label>きょう</NativeTabs.Trigger.Label>
       </NativeTabs.Trigger>
 
-      <NativeTabs.Trigger name="index">
+      <NativeTabs.Trigger name="calendar">
         <NativeTabs.Trigger.Icon sf="calendar" />
         <NativeTabs.Trigger.Label>日記</NativeTabs.Trigger.Label>
       </NativeTabs.Trigger>

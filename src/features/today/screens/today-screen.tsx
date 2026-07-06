@@ -1,8 +1,9 @@
 import { ArrowUp, Sparkles } from 'lucide-react-native';
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
+  Keyboard,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -10,7 +11,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -55,6 +56,24 @@ export function TodayScreen() {
 
   const [text, setText] = useState('');
   const listRef = useRef<FlatList<TodayLog>>(null);
+
+  // The floating native tab bar overlays content, so the input bar needs
+  // clearance for it (+ home indicator) — except while the keyboard is up,
+  // when the tab bar is hidden behind it and the clearance would read as a
+  // dead gap above the keyboard.
+  const insets = useSafeAreaInsets();
+  const [keyboardShown, setKeyboardShown] = useState(false);
+  useEffect(() => {
+    const show = Keyboard.addListener('keyboardWillShow', () => setKeyboardShown(true));
+    const hide = Keyboard.addListener('keyboardWillHide', () => setKeyboardShown(false));
+    return () => {
+      show.remove();
+      hide.remove();
+    };
+  }, []);
+  const inputBarBottom = keyboardShown
+    ? Spacing.two
+    : insets.bottom + BottomTabInset + Spacing.two;
 
   const send = useCallback(() => {
     const trimmed = text.trim();
@@ -158,7 +177,11 @@ export function TodayScreen() {
             </ThemedText>
           ) : null}
 
-          <View style={[styles.inputBar, { borderTopColor: theme.backgroundElement }]}>
+          <View
+            style={[
+              styles.inputBar,
+              { borderTopColor: theme.backgroundElement, paddingBottom: inputBarBottom },
+            ]}>
             <TextInput
               value={text}
               onChangeText={setText}
@@ -267,7 +290,6 @@ const styles = StyleSheet.create({
     gap: Spacing.two,
     paddingHorizontal: Spacing.three,
     paddingTop: Spacing.two,
-    paddingBottom: BottomTabInset + Spacing.two,
     borderTopWidth: StyleSheet.hairlineWidth,
   },
   input: {
