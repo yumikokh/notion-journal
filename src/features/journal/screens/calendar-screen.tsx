@@ -1,9 +1,8 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { LayoutList, RotateCw, SlidersHorizontal } from 'lucide-react-native';
+import { LayoutList, Plus, Settings, SlidersHorizontal } from 'lucide-react-native';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
   Animated,
   FlatList,
   KeyboardAvoidingView,
@@ -18,7 +17,7 @@ import {
   useColorScheme,
   type ViewToken,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -49,6 +48,7 @@ import {
   habitIcon,
 } from '@/features/journal/habit-icons';
 import { useMonthEntries } from '@/features/journal/use-month-entries';
+import { QuickCaptureSheet } from '@/features/today/components/quick-capture-sheet';
 import { notionChipColor } from '@/features/notion/colors';
 import { useTheme } from '@/hooks/use-theme';
 import { toDateKey } from '@/lib/date';
@@ -127,6 +127,16 @@ export function CalendarScreen() {
   const viewMode = activeViewMode(prefs);
 
   const [drawerDate, setDrawerDate] = useState<string | null>(null);
+
+  // Quick-capture sheet behind the floating ＋ button — the fastest path
+  // from "opened the app" to "wrote a fragment".
+  const insets = useSafeAreaInsets();
+  const [quickCaptureOpen, setQuickCaptureOpen] = useState(false);
+  const openTodayFromCapture = useCallback(() => {
+    setQuickCaptureOpen(false);
+    // Let the sheet's dismiss animation finish before presenting the drawer.
+    setTimeout(() => setDrawerDate(toDateKey(new Date())), 400);
+  }, []);
 
   // Header label follows the topmost visible month while scrolling.
   const [visibleIndex, setVisibleIndex] = useState(currentMonthIndex);
@@ -338,16 +348,11 @@ export function CalendarScreen() {
               </Pressable>
             )}
             <Pressable
-              onPress={onRefresh}
-              disabled={refreshing}
+              onPress={() => router.push('/settings')}
               accessibilityRole="button"
-              accessibilityLabel="最新のデータに更新"
+              accessibilityLabel="設定"
               style={[styles.actionBtn, { backgroundColor: theme.backgroundElement }]}>
-              {refreshing ? (
-                <ActivityIndicator size="small" color={theme.textSecondary} />
-              ) : (
-                <RotateCw size={16} color={theme.textSecondary} strokeWidth={1.8} />
-              )}
+              <Settings size={16} color={theme.textSecondary} strokeWidth={1.8} />
             </Pressable>
             <Pressable
               onPress={() => router.push('/journal-list')}
@@ -423,6 +428,22 @@ export function CalendarScreen() {
           )}
         </View>
       </SafeAreaView>
+
+      {/* Floating quick-capture button — write first, browse second. */}
+      <Pressable
+        onPress={() => setQuickCaptureOpen(true)}
+        accessibilityRole="button"
+        accessibilityLabel="今日のログを書く"
+        style={({ pressed }) => [
+          styles.fab,
+          {
+            backgroundColor: theme.accent,
+            bottom: insets.bottom + BottomTabInset + Spacing.four,
+            opacity: pressed ? 0.85 : 1,
+          },
+        ]}>
+        <Plus size={26} color="#ffffff" strokeWidth={2.2} />
+      </Pressable>
 
       {/* View-mode sheet: switching a mode applies immediately, so the
           calendar behind the sheet live-previews the change. */}
@@ -618,6 +639,11 @@ export function CalendarScreen() {
         </KeyboardAvoidingView>
       </Modal>
 
+      <QuickCaptureSheet
+        visible={quickCaptureOpen}
+        onClose={() => setQuickCaptureOpen(false)}
+        onOpenToday={openTodayFromCapture}
+      />
       <DayDrawer date={drawerDate} onClose={closeDrawer} feelingColors={feelingColorMap} />
     </ThemedView>
   );
@@ -758,5 +784,19 @@ const styles = StyleSheet.create({
   },
   listContainer: {
     flex: 1,
+  },
+  fab: {
+    position: 'absolute',
+    right: Spacing.four,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000000',
+    shadowOpacity: 0.18,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 4,
   },
 });

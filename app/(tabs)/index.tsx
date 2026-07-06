@@ -1,3 +1,3 @@
-import { TodayScreen } from '@/features/today/screens/today-screen';
+import { CalendarScreen } from '@/features/journal/screens/calendar-screen';
 
-export default TodayScreen;
+export default CalendarScreen;

@@ -51,8 +51,8 @@ export function useNotificationTap(): void {
 
     const openForDate = (dateKey: string) => {
       // The calendar tab (which consumes `?date=` by opening that day's
-      // drawer) lives at `/(tabs)/calendar` — index is the きょう tab.
-      router.navigate({ pathname: '/calendar', params: { date: dateKey } });
+      // drawer) is the index tab.
+      router.navigate({ pathname: '/', params: { date: dateKey } });
     };
 
     // Cold start: was the app launched by tapping a reminder?

@@ -1,6 +1,4 @@
-import { useQueryClient } from '@tanstack/react-query';
-import { useRouter } from 'expo-router';
-import { ArrowUp, RotateCw, Settings, Sparkles } from 'lucide-react-native';
+import { ArrowUp, Sparkles, X } from 'lucide-react-native';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -8,9 +6,9 @@ import {
   FlatList,
   Keyboard,
   KeyboardAvoidingView,
+  Modal,
   Platform,
   Pressable,
-  RefreshControl,
   StyleSheet,
   TextInput,
   View,
@@ -19,12 +17,9 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { BottomTabInset, Radius, Spacing } from '@/constants/theme';
+import { Radius, Spacing } from '@/constants/theme';
 import { buildDayCalendarContext } from '@/features/calendar/calendar-context';
 import { useDayEvents } from '@/features/calendar/use-day-events';
-import { DayDrawer } from '@/features/journal/components/day-drawer';
-import { FEELINGS, type Feeling } from '@/features/journal/draft';
-import { useMonthEntries } from '@/features/journal/use-month-entries';
 import { useTodayEntry } from '@/features/journal/use-today-entry';
 import { useAppendLog } from '@/features/today/use-append-log';
 import { useSummarizeDay } from '@/features/today/use-summarize-day';
@@ -32,24 +27,41 @@ import { formatTimeLabel, parseTodayLogs, type TodayLog } from '@/features/today
 import { useTheme } from '@/hooks/use-theme';
 import { toDateKey } from '@/lib/date';
 import { isSupabaseEnvConfigured } from '@/lib/env';
-import type { NotionSelectColor } from '@/lib/supabase';
 
 const WEEKDAY_LABELS = ['日', '月', '火', '水', '木', '金', '土'];
 
+type Props = {
+  visible: boolean;
+  onClose: () => void;
+  /** Open the day editor (DayDrawer) for today — owned by the caller. */
+  onOpenToday: () => void;
+};
+
 /**
- * きょう (Today) tab — the app's capture surface.
+ * Quick-capture sheet, opened from the calendar's floating ＋ button.
  *
  * Philosophy: accumulate small fragments through the day with as little
- * friction as possible (one input bar, one tap to send), then distill them
- * at night — the ✨まとめる button opens the day drawer where the existing
- * AI summary (body → DIARY) lives. Reading back happens in the 日記 tab.
+ * friction as possible (FAB → keyboard already up → send), then distill
+ * them at night — まとめる runs the AI summary straight into DIARY.
  */
-export function TodayScreen() {
+export function QuickCaptureSheet({ visible, onClose, onOpenToday }: Props) {
+  return (
+    <Modal
+      visible={visible}
+      animationType="slide"
+      presentationStyle="pageSheet"
+      onRequestClose={onClose}>
+      {visible && <SheetContent onClose={onClose} onOpenToday={onOpenToday} />}
+    </Modal>
+  );
+}
+
+function SheetContent({ onClose, onOpenToday }: Pick<Props, 'onClose' | 'onOpenToday'>) {
   const theme = useTheme();
   const envOk = isSupabaseEnvConfigured();
 
-  // Recomputed every render so the screen rolls over at midnight without a
-  // restart (any state change after 0:00 re-targets the new day).
+  // Recomputed every render so a sheet left open across midnight targets
+  // the new day on the next interaction.
   const today = new Date();
   const todayKey = toDateKey(today);
   const dateLabel = `${today.getMonth() + 1}/${today.getDate()} (${WEEKDAY_LABELS[today.getDay()]})`;
@@ -63,8 +75,6 @@ export function TodayScreen() {
 
   // One-tap まとめる: AI-summarize the accumulated body straight into the
   // DIARY property. Calendar events (when connected) ride along as context.
-  const router = useRouter();
-  const queryClient = useQueryClient();
   const dayEvents = useDayEvents(todayKey);
   const summarize = useSummarizeDay(todayKey);
   const bodyMarkdown = entry.data?.bodyMarkdown ?? '';
@@ -87,41 +97,8 @@ export function TodayScreen() {
     start();
   }, [canSummarize, summarize, bodyMarkdown, entry.data, dayEvents.data]);
 
-  // Explicit refresh: today's entry + this month (feeds the DIARY card,
-  // timeline, and the calendar behind it).
-  const [refreshing, setRefreshing] = useState(false);
-  const refresh = useCallback(async () => {
-    setRefreshing(true);
-    try {
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ['journal', 'today', todayKey] }),
-        queryClient.invalidateQueries({ queryKey: ['journal', 'month', todayKey.slice(0, 7)] }),
-      ]);
-    } finally {
-      setRefreshing(false);
-    }
-  }, [queryClient, todayKey]);
-
   const [text, setText] = useState('');
   const listRef = useRef<FlatList<TodayLog>>(null);
-
-  // The floating native tab bar overlays content, so the input bar needs
-  // clearance for it (+ home indicator) — except while the keyboard is up,
-  // when the tab bar is hidden behind it and the clearance would read as a
-  // dead gap above the keyboard.
-  const insets = useSafeAreaInsets();
-  const [keyboardShown, setKeyboardShown] = useState(false);
-  useEffect(() => {
-    const show = Keyboard.addListener('keyboardWillShow', () => setKeyboardShown(true));
-    const hide = Keyboard.addListener('keyboardWillHide', () => setKeyboardShown(false));
-    return () => {
-      show.remove();
-      hide.remove();
-    };
-  }, []);
-  const inputBarBottom = keyboardShown
-    ? Spacing.two
-    : insets.bottom + BottomTabInset + Spacing.two;
 
   const send = useCallback(() => {
     const trimmed = text.trim();
@@ -132,20 +109,19 @@ export function TodayScreen() {
     requestAnimationFrame(() => listRef.current?.scrollToEnd({ animated: true }));
   }, [text, appendLog]);
 
-  // DayDrawer for the「まとめる」flow; feeling colors ride on the month
-  // cache the calendar already maintains.
-  const [drawerDate, setDrawerDate] = useState<string | null>(null);
-  const currentYearMonth = todayKey.slice(0, 7);
-  const monthEntries = useMonthEntries(currentYearMonth, { enabled: envOk });
-  const feelingColorMap = useMemo(() => {
-    const map: Partial<Record<Feeling, NotionSelectColor | null>> = {};
-    monthEntries.data?.forEach((e) => {
-      if (!e.feeling || !FEELINGS.includes(e.feeling as Feeling)) return;
-      const key = e.feeling as Feeling;
-      if (!(key in map)) map[key] = e.feelingColor;
-    });
-    return map;
-  }, [monthEntries.data]);
+  // Inside a pageSheet there is no tab bar; the input only needs the home
+  // indicator clearance, and none at all while the keyboard is up.
+  const insets = useSafeAreaInsets();
+  const [keyboardShown, setKeyboardShown] = useState(false);
+  useEffect(() => {
+    const show = Keyboard.addListener('keyboardWillShow', () => setKeyboardShown(true));
+    const hide = Keyboard.addListener('keyboardWillHide', () => setKeyboardShown(false));
+    return () => {
+      show.remove();
+      hide.remove();
+    };
+  }, []);
+  const inputBarBottom = keyboardShown ? Spacing.two : insets.bottom + Spacing.two;
 
   const renderLog = useCallback(
     ({ item }: { item: TodayLog }) => (
@@ -164,12 +140,11 @@ export function TodayScreen() {
   const canSend = text.trim().length > 0 && envOk && !appendLog.isPending;
 
   return (
-    <ThemedView style={styles.root}>
-      <SafeAreaView style={styles.safeArea} edges={['top']}>
+    <ThemedView style={styles.flex}>
+      <SafeAreaView style={styles.flex} edges={['bottom']}>
         <KeyboardAvoidingView
           style={styles.flex}
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-          keyboardVerticalOffset={0}>
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
           <View style={styles.header}>
             <View style={styles.headerTitleGroup}>
               <ThemedText type="subtitle">Today</ThemedText>
@@ -178,25 +153,6 @@ export function TodayScreen() {
               </ThemedText>
             </View>
             <View style={styles.headerActions}>
-              <Pressable
-                onPress={refresh}
-                disabled={refreshing}
-                accessibilityRole="button"
-                accessibilityLabel="最新のデータに更新"
-                style={[styles.iconBtn, { backgroundColor: theme.backgroundElement }]}>
-                {refreshing ? (
-                  <ActivityIndicator size="small" color={theme.textSecondary} />
-                ) : (
-                  <RotateCw size={16} color={theme.textSecondary} strokeWidth={1.8} />
-                )}
-              </Pressable>
-              <Pressable
-                onPress={() => router.push('/settings')}
-                accessibilityRole="button"
-                accessibilityLabel="設定"
-                style={[styles.iconBtn, { backgroundColor: theme.backgroundElement }]}>
-                <Settings size={16} color={theme.textSecondary} strokeWidth={1.8} />
-              </Pressable>
               <Pressable
                 onPress={runSummarize}
                 disabled={!canSummarize}
@@ -215,6 +171,14 @@ export function TodayScreen() {
                   {summarize.isPending ? 'まとめ中…' : 'まとめる'}
                 </ThemedText>
               </Pressable>
+              <Pressable
+                onPress={onClose}
+                accessibilityRole="button"
+                accessibilityLabel="閉じる"
+                hitSlop={8}
+                style={[styles.iconBtn, { backgroundColor: theme.backgroundElement }]}>
+                <X size={16} color={theme.textSecondary} strokeWidth={2} />
+              </Pressable>
             </View>
           </View>
 
@@ -226,7 +190,7 @@ export function TodayScreen() {
 
           {(entry.data?.diary ?? '').trim().length > 0 && (
             <Pressable
-              onPress={() => setDrawerDate(todayKey)}
+              onPress={onOpenToday}
               accessibilityRole="button"
               accessibilityLabel="今日のDIARYを開く"
               style={({ pressed }) => [
@@ -253,15 +217,6 @@ export function TodayScreen() {
             showsVerticalScrollIndicator={false}
             contentContainerStyle={styles.listContent}
             onContentSizeChange={() => listRef.current?.scrollToEnd({ animated: false })}
-            refreshControl={
-              envOk ? (
-                <RefreshControl
-                  refreshing={refreshing}
-                  onRefresh={refresh}
-                  tintColor={theme.textSecondary}
-                />
-              ) : undefined
-            }
             ListEmptyComponent={
               !envOk ? (
                 <ThemedText type="small" themeColor="textSecondary" style={styles.emptyText}>
@@ -299,6 +254,7 @@ export function TodayScreen() {
               value={text}
               onChangeText={setText}
               multiline
+              autoFocus
               placeholder="いま、なにしてる？"
               placeholderTextColor={theme.textSecondary}
               style={[
@@ -327,22 +283,11 @@ export function TodayScreen() {
           </View>
         </KeyboardAvoidingView>
       </SafeAreaView>
-      <DayDrawer
-        date={drawerDate}
-        onClose={() => setDrawerDate(null)}
-        feelingColors={feelingColorMap}
-      />
     </ThemedView>
   );
 }
 
 const styles = StyleSheet.create({
-  root: {
-    flex: 1,
-  },
-  safeArea: {
-    flex: 1,
-  },
   flex: {
     flex: 1,
   },
@@ -351,7 +296,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: Spacing.four,
-    paddingTop: Spacing.two,
+    paddingTop: Spacing.three,
     paddingBottom: Spacing.two,
   },
   headerTitleGroup: {
