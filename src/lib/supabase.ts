@@ -46,6 +46,19 @@ export function invokeNotionTodayGet(payload: { date: string }) {
 }
 
 /**
+ * Append one timestamped quick-capture line (`**HH:MM** text`) to the
+ * daily page body, creating the page when the day has none yet. Returns
+ * the body after the append so the client cache can be updated exactly.
+ */
+export function invokeNotionTodayAppend(payload: {
+  date: string;
+  timeLabel: string;
+  text: string;
+}) {
+  return invoke<{ notionPageId: string; bodyMarkdown: string }>('notion-today-append', payload);
+}
+
+/**
  * `notion-today-save` is split into two paths:
  *   - properties present, bodyMarkdown undefined → property-only update
  *   - bodyMarkdown present, properties undefined → body-only replacement
