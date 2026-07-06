@@ -124,7 +124,7 @@ export function TodayScreen() {
           keyboardVerticalOffset={0}>
           <View style={styles.header}>
             <View style={styles.headerTitleGroup}>
-              <ThemedText type="subtitle">きょう</ThemedText>
+              <ThemedText type="subtitle">today</ThemedText>
               <ThemedText type="small" themeColor="textSecondary">
                 {dateLabel}
               </ThemedText>
