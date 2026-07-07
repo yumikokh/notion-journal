@@ -84,5 +84,6 @@ export const Radius = {
   xl: 20,
 } as const;
 
-export const BottomTabInset = Platform.select({ ios: 50, android: 80 }) ?? 0;
+// Clearance for the floating glass tab pill (52pt) + its bottom offset.
+export const BottomTabInset = Platform.select({ ios: 64, android: 80 }) ?? 0;
 export const MaxContentWidth = 800;

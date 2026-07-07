@@ -1,8 +1,18 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { LayoutList, Plus, Settings, SlidersHorizontal } from 'lucide-react-native';
+import { GlassView, isLiquidGlassAvailable } from 'expo-glass-effect';
+import {
+  LayoutList,
+  MoreHorizontal,
+  PenLine,
+  RotateCw,
+  Settings,
+  SlidersHorizontal,
+} from 'lucide-react-native';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  ActivityIndicator,
+  Alert,
   Animated,
   FlatList,
   KeyboardAvoidingView,
@@ -49,6 +59,8 @@ import {
 } from '@/features/journal/habit-icons';
 import { useMonthEntries } from '@/features/journal/use-month-entries';
 import { QuickCaptureSheet } from '@/features/today/components/quick-capture-sheet';
+import { formatTimeLabel } from '@/features/today/today-log';
+import { useAppendLog } from '@/features/today/use-append-log';
 import { notionChipColor } from '@/features/notion/colors';
 import { useTheme } from '@/hooks/use-theme';
 import { toDateKey } from '@/lib/date';
@@ -56,6 +68,8 @@ import { isSupabaseEnvConfigured } from '@/lib/env';
 import type { MonthEntry, NotionSelectColor } from '@/lib/supabase';
 
 const WEEKDAY_LABELS = ['日', '月', '火', '水', '木', '金', '土'];
+/** Liquid glass needs iOS 26+; older systems get solid-color fallbacks. */
+const glassOk = isLiquidGlassAvailable();
 /** Cell height relative to width — taller than square so photos read well. */
 const CELL_HEIGHT_RATIO = 1.4;
 /** How far the continuous calendar reaches (months before/after today). */
@@ -129,14 +143,32 @@ export function CalendarScreen() {
   const [drawerDate, setDrawerDate] = useState<string | null>(null);
 
   // Quick-capture sheet behind the floating ＋ button — the fastest path
-  // from "opened the app" to "wrote a fragment".
+  // from "opened the app" to "wrote a fragment". The mutation lives here
+  // (not in the sheet) so the sheet can close optimistically on send and
+  // a failure still surfaces as an alert.
   const insets = useSafeAreaInsets();
   const [quickCaptureOpen, setQuickCaptureOpen] = useState(false);
-  const openTodayFromCapture = useCallback(() => {
-    setQuickCaptureOpen(false);
-    // Let the sheet's dismiss animation finish before presenting the drawer.
-    setTimeout(() => setDrawerDate(toDateKey(new Date())), 400);
-  }, []);
+  const appendLog = useAppendLog(todayKey);
+  const submitQuickLog = useCallback(
+    (text: string) => {
+      appendLog.mutate(
+        { timeLabel: formatTimeLabel(new Date()), text },
+        {
+          onError: (err) =>
+            Alert.alert('送れませんでした', `${err.message}\n\n「${text}」`, [{ text: 'OK' }]),
+        },
+      );
+    },
+    [appendLog],
+  );
+
+  // Header submenu (⋯): display-mode switcher + settings.
+  const [subMenuOpen, setSubMenuOpen] = useState(false);
+  const openModeSheetFromMenu = useCallback(() => {
+    setSubMenuOpen(false);
+    // Let the menu modal dismiss before presenting the mode sheet modal.
+    setTimeout(openModeSheet, 250);
+  }, [openModeSheet]);
 
   // Header label follows the topmost visible month while scrolling.
   const [visibleIndex, setVisibleIndex] = useState(currentMonthIndex);
@@ -348,13 +380,6 @@ export function CalendarScreen() {
               </Pressable>
             )}
             <Pressable
-              onPress={() => router.push('/settings')}
-              accessibilityRole="button"
-              accessibilityLabel="設定"
-              style={[styles.actionBtn, { backgroundColor: theme.backgroundElement }]}>
-              <Settings size={16} color={theme.textSecondary} strokeWidth={1.8} />
-            </Pressable>
-            <Pressable
               onPress={() => router.push('/journal-list')}
               accessibilityRole="button"
               accessibilityLabel="日記の一覧"
@@ -362,14 +387,23 @@ export function CalendarScreen() {
               <LayoutList size={16} color={theme.textSecondary} strokeWidth={1.8} />
             </Pressable>
             <Pressable
-              onPress={openModeSheet}
+              onPress={() => setSubMenuOpen(true)}
               accessibilityRole="button"
-              accessibilityLabel="表示モードを切り替え"
-              style={[styles.modePill, { backgroundColor: theme.backgroundElement }]}>
-              <SlidersHorizontal size={14} color={theme.textSecondary} strokeWidth={1.8} />
-              <ThemedText type="small" themeColor="textSecondary">
-                {viewMode.label}
-              </ThemedText>
+              accessibilityLabel="メニュー"
+              style={[styles.actionBtn, { backgroundColor: theme.backgroundElement }]}>
+              <MoreHorizontal size={16} color={theme.textSecondary} strokeWidth={1.8} />
+            </Pressable>
+            <Pressable
+              onPress={onRefresh}
+              disabled={refreshing}
+              accessibilityRole="button"
+              accessibilityLabel="最新のデータに更新"
+              style={[styles.actionBtn, { backgroundColor: theme.backgroundElement }]}>
+              {refreshing ? (
+                <ActivityIndicator size="small" color={theme.textSecondary} />
+              ) : (
+                <RotateCw size={16} color={theme.textSecondary} strokeWidth={1.8} />
+              )}
             </Pressable>
           </View>
         </View>
@@ -429,20 +463,22 @@ export function CalendarScreen() {
         </View>
       </SafeAreaView>
 
-      {/* Floating quick-capture button — write first, browse second. */}
+      {/* Floating quick-capture button (liquid glass) — sits bottom-right,
+          mirroring the left-aligned glass tab bar. */}
       <Pressable
         onPress={() => setQuickCaptureOpen(true)}
         accessibilityRole="button"
         accessibilityLabel="今日のログを書く"
         style={({ pressed }) => [
           styles.fab,
-          {
-            backgroundColor: theme.accent,
-            bottom: insets.bottom + BottomTabInset + Spacing.four,
-            opacity: pressed ? 0.85 : 1,
-          },
+          { bottom: insets.bottom + Spacing.two, opacity: pressed ? 0.85 : 1 },
         ]}>
-        <Plus size={26} color="#ffffff" strokeWidth={2.2} />
+        <GlassView
+          glassEffectStyle="regular"
+          isInteractive
+          style={[styles.fabGlass, !glassOk && { backgroundColor: theme.accent }]}>
+          <PenLine size={24} color={glassOk ? theme.accent : '#ffffff'} strokeWidth={2} />
+        </GlassView>
       </Pressable>
 
       {/* View-mode sheet: switching a mode applies immediately, so the
@@ -639,10 +675,50 @@ export function CalendarScreen() {
         </KeyboardAvoidingView>
       </Modal>
 
+      {/* Header submenu (liquid glass): quiet actions that don't deserve
+          their own button — display mode + settings. */}
+      <Modal
+        visible={subMenuOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setSubMenuOpen(false)}>
+        <Pressable
+          style={styles.menuBackdrop}
+          accessibilityLabel="メニューを閉じる"
+          onPress={() => setSubMenuOpen(false)}>
+          <GlassView
+            glassEffectStyle="regular"
+            style={[
+              styles.menuCard,
+              { top: insets.top + 52 },
+              !glassOk && { backgroundColor: theme.background },
+            ]}>
+            <Pressable
+              onPress={openModeSheetFromMenu}
+              accessibilityRole="button"
+              style={({ pressed }) => [styles.menuItem, pressed && { opacity: 0.6 }]}>
+              <SlidersHorizontal size={16} color={theme.textSecondary} strokeWidth={1.8} />
+              <ThemedText>表示モード（{viewMode.label}）</ThemedText>
+            </Pressable>
+            <View style={[styles.menuDivider, { backgroundColor: theme.backgroundElement }]} />
+            <Pressable
+              onPress={() => {
+                setSubMenuOpen(false);
+                router.push('/settings');
+              }}
+              accessibilityRole="button"
+              style={({ pressed }) => [styles.menuItem, pressed && { opacity: 0.6 }]}>
+              <Settings size={16} color={theme.textSecondary} strokeWidth={1.8} />
+              <ThemedText>設定</ThemedText>
+            </Pressable>
+          </GlassView>
+        </Pressable>
+      </Modal>
+
       <QuickCaptureSheet
         visible={quickCaptureOpen}
         onClose={() => setQuickCaptureOpen(false)}
-        onOpenToday={openTodayFromCapture}
+        onSubmit={submitQuickLog}
       />
       <DayDrawer date={drawerDate} onClose={closeDrawer} feelingColors={feelingColorMap} />
     </ThemedView>
@@ -692,13 +768,28 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  modePill: {
+  menuBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.15)',
+  },
+  menuCard: {
+    position: 'absolute',
+    right: Spacing.three,
+    minWidth: 200,
+    borderRadius: Radius.lg,
+    overflow: 'hidden',
+    paddingVertical: Spacing.one,
+  },
+  menuItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing.one,
+    gap: Spacing.two,
     paddingHorizontal: Spacing.three,
-    height: 32,
-    borderRadius: Radius.lg,
+    paddingVertical: Spacing.two + 2,
+  },
+  menuDivider: {
+    height: StyleSheet.hairlineWidth,
+    marginHorizontal: Spacing.two,
   },
   sheetFlex: {
     flex: 1,
@@ -788,15 +879,12 @@ const styles = StyleSheet.create({
   fab: {
     position: 'absolute',
     right: Spacing.four,
+  },
+  fabGlass: {
     width: 56,
     height: 56,
     borderRadius: 28,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#000000',
-    shadowOpacity: 0.18,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 4,
   },
 });
