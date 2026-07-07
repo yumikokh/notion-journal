@@ -5,10 +5,11 @@ import { Pressable, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
-import { Radius, Spacing } from '@/constants/theme';
+import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 
 const glassOk = isLiquidGlassAvailable();
+const BAR_HEIGHT = 60;
 
 const TAB_CONFIG: Record<string, { label: string; Icon: LucideIcon }> = {
   index: { label: '日記', Icon: BookOpen },
@@ -31,10 +32,11 @@ type TabBarProps = {
 };
 
 /**
- * Bottom navigation: a left-aligned liquid-glass pill (日記 / ふりかえり).
- * The right side of the same row belongs to the diary tab's floating ＋
- * (quick capture), so the two read as one balanced bottom bar. 設定 has no
- * tab slot — it lives in the diary header's submenu.
+ * Bottom navigation, iOS 26 tab-bar style: one liquid-glass capsule holds
+ * every tab (icon above label), and the selected tab is highlighted by a
+ * bright lens pill inside the capsule — mirroring the system look where a
+ * standalone glass circle (here: the diary tab's floating pen) sits to the
+ * right. 設定 lives in the diary header's submenu, not a tab.
  */
 export default function AppTabs() {
   return (
@@ -52,10 +54,12 @@ function GlassTabBar({ state, navigation }: TabBarProps) {
   const insets = useSafeAreaInsets();
 
   return (
-    <View pointerEvents="box-none" style={[styles.barRow, { bottom: insets.bottom + Spacing.two }]}>
+    <View
+      pointerEvents="box-none"
+      style={[styles.barRow, { bottom: insets.bottom + Spacing.two }]}>
       <GlassView
         glassEffectStyle="regular"
-        style={[styles.pill, !glassOk && { backgroundColor: theme.backgroundElement }]}>
+        style={[styles.capsule, !glassOk && { backgroundColor: theme.backgroundElement }]}>
         {state.routes.map((route, index) => {
           const config = TAB_CONFIG[route.name];
           if (!config) return null;
@@ -76,11 +80,12 @@ function GlassTabBar({ state, navigation }: TabBarProps) {
               }}
               accessibilityRole="tab"
               accessibilityState={{ selected }}
-              style={[styles.tab, selected && { backgroundColor: theme.accentSoft }]}>
-              <config.Icon size={18} color={color} strokeWidth={selected ? 2.2 : 1.8} />
-              <ThemedText type="smallBold" style={{ color }}>
-                {config.label}
-              </ThemedText>
+              style={[
+                styles.tab,
+                selected && [styles.tabSelected, { backgroundColor: theme.background }],
+              ]}>
+              <config.Icon size={20} color={color} strokeWidth={selected ? 2.2 : 1.8} />
+              <ThemedText style={[styles.tabLabel, { color }]}>{config.label}</ThemedText>
             </Pressable>
           );
         })}
@@ -97,20 +102,30 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'flex-start',
   },
-  pill: {
+  capsule: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing.one,
-    padding: Spacing.one,
-    borderRadius: Radius.xl + 8,
-    overflow: 'hidden',
+    height: BAR_HEIGHT,
+    borderRadius: BAR_HEIGHT / 2,
+    paddingHorizontal: Spacing.one,
   },
   tab: {
-    flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing.one,
-    paddingHorizontal: Spacing.three,
-    height: 44,
-    borderRadius: Radius.xl,
+    justifyContent: 'center',
+    gap: 2,
+    height: BAR_HEIGHT - Spacing.one * 2,
+    borderRadius: (BAR_HEIGHT - Spacing.one * 2) / 2,
+    paddingHorizontal: Spacing.four,
+  },
+  tabSelected: {
+    shadowColor: '#000000',
+    shadowOpacity: 0.12,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
+  },
+  tabLabel: {
+    fontSize: 11,
+    lineHeight: 13,
+    fontWeight: '600',
   },
 });

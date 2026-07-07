@@ -1,7 +1,8 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { GlassView, isLiquidGlassAvailable } from 'expo-glass-effect';
+import { GlassContainer, GlassView, isLiquidGlassAvailable } from 'expo-glass-effect';
 import {
+  ChevronRight,
   LayoutList,
   MoreHorizontal,
   PenLine,
@@ -32,7 +33,6 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { BottomTabInset, Radius, Spacing } from '@/constants/theme';
-import { computeStreak } from '@/features/insights/insights';
 import { buildMonthWeeks, type MonthCell } from '@/features/journal/build-month-grid';
 import {
   DEFAULT_PREFS,
@@ -61,7 +61,6 @@ import { useMonthEntries } from '@/features/journal/use-month-entries';
 import { QuickCaptureSheet } from '@/features/today/components/quick-capture-sheet';
 import { formatTimeLabel } from '@/features/today/today-log';
 import { useAppendLog } from '@/features/today/use-append-log';
-import { notionChipColor } from '@/features/notion/colors';
 import { useTheme } from '@/hooks/use-theme';
 import { toDateKey } from '@/lib/date';
 import { isSupabaseEnvConfigured } from '@/lib/env';
@@ -72,6 +71,16 @@ const WEEKDAY_LABELS = ['日', '月', '火', '水', '木', '金', '土'];
 const glassOk = isLiquidGlassAvailable();
 /** Cell height relative to width — taller than square so photos read well. */
 const CELL_HEIGHT_RATIO = 1.4;
+/**
+ * Vertical space the floating glass chrome (header bar + weekday strip)
+ * occupies over the list. The list gets a spacer of this height so content
+ * rests below the chrome, then slides beneath it while scrolling — which
+ * is what makes the glass actually refract.
+ */
+const HEADER_BAR_HEIGHT = 44;
+const WEEKDAY_STRIP_HEIGHT = 28;
+const FLOATING_CHROME_HEIGHT =
+  Spacing.two + HEADER_BAR_HEIGHT + Spacing.two + WEEKDAY_STRIP_HEIGHT + Spacing.two;
 /** How far the continuous calendar reaches (months before/after today). */
 const MONTHS_BACK = 24;
 const MONTHS_FORWARD = 1;
@@ -184,17 +193,6 @@ export function CalendarScreen() {
   const currentYearMonth = months[currentMonthIndex].key;
   const currentEntries = useMonthEntries(currentYearMonth, { enabled: envOk });
 
-  // Streak chip in the header. Two months of history cover any realistic
-  // current run while reusing the calendar's own month cache; a streak
-  // longer than that would display capped rather than fetching more.
-  const prevEntries = useMonthEntries(months[currentMonthIndex - 1].key, { enabled: envOk });
-  const streak = useMemo(() => {
-    const dates = [...(prevEntries.data ?? []), ...(currentEntries.data ?? [])].map(
-      (e: MonthEntry) => e.date,
-    );
-    return computeStreak(dates, today);
-  }, [prevEntries.data, currentEntries.data, today]);
-
   const feelingColorMap = useMemo(() => {
     const m: Partial<Record<Feeling, NotionSelectColor | null>> = {};
     currentEntries.data?.forEach((e: MonthEntry) => {
@@ -224,12 +222,37 @@ export function CalendarScreen() {
     (year: number, month: number, animated: boolean) => {
       const key = `${year}-${String(month + 1).padStart(2, '0')}`;
       const index = months.findIndex((m) => m.key === key);
-      if (index >= 0) listRef.current?.scrollToIndex({ index, animated });
+      if (index >= 0) {
+        listRef.current?.scrollToIndex({
+          index,
+          animated,
+          viewOffset: FLOATING_CHROME_HEIGHT,
+        });
+      }
     },
     [months],
   );
   const scrollToToday = useCallback(() => {
-    listRef.current?.scrollToIndex({ index: currentMonthIndex, animated: true });
+    listRef.current?.scrollToIndex({
+      index: currentMonthIndex,
+      animated: true,
+      viewOffset: FLOATING_CHROME_HEIGHT,
+    });
+  }, [currentMonthIndex]);
+
+  // Jump to the current month once the list has laid out. `initialScrollIndex`
+  // can't express the floating-chrome viewOffset, and the `contentOffset`
+  // prop is unreliable under FlatList virtualization — an explicit one-shot
+  // scroll on layout is.
+  const didInitScroll = useRef(false);
+  const initialScrollToToday = useCallback(() => {
+    if (didInitScroll.current) return;
+    didInitScroll.current = true;
+    listRef.current?.scrollToIndex({
+      index: currentMonthIndex,
+      animated: false,
+      viewOffset: FLOATING_CHROME_HEIGHT,
+    });
   }, [currentMonthIndex]);
 
   // Deep link from a tapped reminder notification: `/(tabs)?date=YYYY-MM-DD`.
@@ -297,9 +320,11 @@ export function CalendarScreen() {
   }, [queryClient]);
 
   // Precomputed per-month heights let getItemLayout answer synchronously,
-  // which initialScrollIndex (jump straight to the current month) requires.
+  // which the initial contentOffset (jump straight to the current month)
+  // requires. Offsets include the chrome spacer (the list's header view
+  // that keeps content below the floating glass header at rest).
   const itemLayouts = useMemo(() => {
-    let offset = 0;
+    let offset = FLOATING_CHROME_HEIGHT;
     return months.map((m) => {
       const length = monthSectionHeight(m.weeks.length, cellHeight);
       const layout = { length, offset };
@@ -349,74 +374,134 @@ export function CalendarScreen() {
   return (
     <ThemedView style={styles.root}>
       <SafeAreaView style={styles.safeArea} edges={['top']}>
-        <View style={styles.header}>
-          <ThemedText type="subtitle">
-            {visibleMonth.year}年{visibleMonth.month + 1}月
-          </ThemedText>
-          <View style={styles.headerActions}>
-            {streak.current > 0 && (
-              <View
-                accessibilityLabel={`連続記録 ${streak.current}日`}
-                style={[
-                  styles.streakChip,
-                  { backgroundColor: notionChipColor('orange', scheme).background },
-                ]}>
-                <ThemedText
-                  type="smallBold"
-                  style={{ color: notionChipColor('orange', scheme).text }}>
-                  🔥{streak.current}
-                </ThemedText>
-              </View>
-            )}
-            {visibleIndex !== currentMonthIndex && (
-              <Pressable
-                onPress={scrollToToday}
-                accessibilityRole="button"
-                accessibilityLabel="今日へ移動"
-                style={[styles.todayBtn, { backgroundColor: theme.accentSoft }]}>
-                <ThemedText type="smallBold" style={{ color: theme.accent }}>
-                  今日
-                </ThemedText>
-              </Pressable>
-            )}
-            <Pressable
-              onPress={() => router.push('/journal-list')}
-              accessibilityRole="button"
-              accessibilityLabel="日記の一覧"
-              style={[styles.actionBtn, { backgroundColor: theme.backgroundElement }]}>
-              <LayoutList size={16} color={theme.textSecondary} strokeWidth={1.8} />
-            </Pressable>
-            <Pressable
-              onPress={() => setSubMenuOpen(true)}
-              accessibilityRole="button"
-              accessibilityLabel="メニュー"
-              style={[styles.actionBtn, { backgroundColor: theme.backgroundElement }]}>
-              <MoreHorizontal size={16} color={theme.textSecondary} strokeWidth={1.8} />
-            </Pressable>
-            <Pressable
-              onPress={onRefresh}
-              disabled={refreshing}
-              accessibilityRole="button"
-              accessibilityLabel="最新のデータに更新"
-              style={[styles.actionBtn, { backgroundColor: theme.backgroundElement }]}>
-              {refreshing ? (
-                <ActivityIndicator size="small" color={theme.textSecondary} />
-              ) : (
-                <RotateCw size={16} color={theme.textSecondary} strokeWidth={1.8} />
-              )}
-            </Pressable>
-          </View>
+        <View
+          style={styles.listContainer}
+          onLayout={(e) => setGridWidth(e.nativeEvent.layout.width)}>
+          {cellWidth > 0 && (
+            <FlatList
+              ref={listRef}
+              data={months}
+              keyExtractor={(m) => m.key}
+              renderItem={renderMonth}
+              getItemLayout={getItemLayout}
+              onLayout={initialScrollToToday}
+              viewabilityConfigCallbackPairs={viewabilityConfigCallbackPairs}
+              initialNumToRender={3}
+              maxToRenderPerBatch={3}
+              windowSize={7}
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={{ paddingBottom: BottomTabInset + Spacing.four }}
+              ListHeaderComponent={
+                // Rest position for content below the floating glass chrome;
+                // scrolling slides months underneath it.
+                <View>
+                  <View style={{ height: FLOATING_CHROME_HEIGHT }} />
+                  {!envOk && (
+                    <ThemedText
+                      type="small"
+                      themeColor="textSecondary"
+                      style={styles.statusText}>
+                      Notion 未接続
+                    </ThemedText>
+                  )}
+                </View>
+              }
+              refreshControl={
+                envOk ? (
+                  <RefreshControl
+                    refreshing={refreshing}
+                    onRefresh={onRefresh}
+                    progressViewOffset={FLOATING_CHROME_HEIGHT}
+                    tintColor={theme.textSecondary}
+                  />
+                ) : undefined
+              }
+            />
+          )}
         </View>
 
-        {!envOk && (
-          <View style={styles.statusRow}>
-            <ThemedText type="small" themeColor="textSecondary">
-              Notion 未接続
+        {/* Floating glass chrome: month title + actions, then the weekday
+            strip. Absolute over the list so the calendar refracts through.
+            (Absolute children ignore the SafeAreaView padding, so the top
+            inset is added manually.) */}
+        <View
+          pointerEvents="box-none"
+          style={[styles.floatingHeader, { top: insets.top + Spacing.two }]}>
+          <GlassView
+            glassEffectStyle="regular"
+            style={[styles.titleGlass, !glassOk && { backgroundColor: theme.backgroundElement }]}>
+            <ThemedText type="subtitle">
+              {visibleMonth.year}年{visibleMonth.month + 1}月
             </ThemedText>
-          </View>
-        )}
-
-        <View style={styles.weekdayRow}>
+          </GlassView>
+          <GlassContainer spacing={10} style={styles.headerActions}>
+            {visibleIndex !== currentMonthIndex && (
+              <GlassView
+                glassEffectStyle="regular"
+                isInteractive
+                tintColor={theme.accentSoft}
+                style={[styles.todayGlass, !glassOk && { backgroundColor: theme.accentSoft }]}>
+                <Pressable
+                  onPress={scrollToToday}
+                  accessibilityRole="button"
+                  accessibilityLabel="今日へ移動"
+                  style={styles.glassBtnInner}>
+                  <ThemedText type="smallBold" style={{ color: theme.accent }}>
+                    今日
+                  </ThemedText>
+                </Pressable>
+              </GlassView>
+            )}
+            <GlassView
+              glassEffectStyle="regular"
+              isInteractive
+              style={[styles.actionGlass, !glassOk && { backgroundColor: theme.backgroundElement }]}>
+              <Pressable
+                onPress={() => router.push('/journal-list')}
+                accessibilityRole="button"
+                accessibilityLabel="日記の一覧"
+                style={styles.glassBtnInner}>
+                <LayoutList size={16} color={theme.textSecondary} strokeWidth={1.8} />
+              </Pressable>
+            </GlassView>
+            <GlassView
+              glassEffectStyle="regular"
+              isInteractive
+              style={[styles.actionGlass, !glassOk && { backgroundColor: theme.backgroundElement }]}>
+              <Pressable
+                onPress={() => setSubMenuOpen(true)}
+                accessibilityRole="button"
+                accessibilityLabel="メニュー"
+                style={styles.glassBtnInner}>
+                <MoreHorizontal size={16} color={theme.textSecondary} strokeWidth={1.8} />
+              </Pressable>
+            </GlassView>
+            <GlassView
+              glassEffectStyle="regular"
+              isInteractive
+              style={[styles.actionGlass, !glassOk && { backgroundColor: theme.backgroundElement }]}>
+              <Pressable
+                onPress={onRefresh}
+                disabled={refreshing}
+                accessibilityRole="button"
+                accessibilityLabel="最新のデータに更新"
+                style={styles.glassBtnInner}>
+                {refreshing ? (
+                  <ActivityIndicator size="small" color={theme.textSecondary} />
+                ) : (
+                  <RotateCw size={16} color={theme.textSecondary} strokeWidth={1.8} />
+                )}
+              </Pressable>
+            </GlassView>
+          </GlassContainer>
+        </View>
+        <GlassView
+          glassEffectStyle="regular"
+          style={[
+            styles.weekdayStrip,
+            { top: insets.top + Spacing.two + HEADER_BAR_HEIGHT + Spacing.two },
+            !glassOk && { backgroundColor: theme.backgroundElement },
+          ]}>
           {WEEKDAY_LABELS.map((label, i) => (
             <ThemedText
               key={label}
@@ -430,37 +515,7 @@ export function CalendarScreen() {
               {label}
             </ThemedText>
           ))}
-        </View>
-
-        <View
-          style={styles.listContainer}
-          onLayout={(e) => setGridWidth(e.nativeEvent.layout.width)}>
-          {cellWidth > 0 && (
-            <FlatList
-              ref={listRef}
-              data={months}
-              keyExtractor={(m) => m.key}
-              renderItem={renderMonth}
-              getItemLayout={getItemLayout}
-              initialScrollIndex={currentMonthIndex}
-              viewabilityConfigCallbackPairs={viewabilityConfigCallbackPairs}
-              initialNumToRender={3}
-              maxToRenderPerBatch={3}
-              windowSize={7}
-              showsVerticalScrollIndicator={false}
-              contentContainerStyle={{ paddingBottom: BottomTabInset + Spacing.four }}
-              refreshControl={
-                envOk ? (
-                  <RefreshControl
-                    refreshing={refreshing}
-                    onRefresh={onRefresh}
-                    tintColor={theme.textSecondary}
-                  />
-                ) : undefined
-              }
-            />
-          )}
-        </View>
+        </GlassView>
       </SafeAreaView>
 
       {/* Floating quick-capture button (liquid glass) — sits bottom-right,
@@ -675,8 +730,7 @@ export function CalendarScreen() {
         </KeyboardAvoidingView>
       </Modal>
 
-      {/* Header submenu (liquid glass): quiet actions that don't deserve
-          their own button — display mode + settings. */}
+      {/* Header submenu: quiet actions that don't deserve their own button. */}
       <Modal
         visible={subMenuOpen}
         transparent
@@ -697,8 +751,16 @@ export function CalendarScreen() {
               onPress={openModeSheetFromMenu}
               accessibilityRole="button"
               style={({ pressed }) => [styles.menuItem, pressed && { opacity: 0.6 }]}>
-              <SlidersHorizontal size={16} color={theme.textSecondary} strokeWidth={1.8} />
-              <ThemedText>表示モード（{viewMode.label}）</ThemedText>
+              <View style={styles.menuItemLabel}>
+                <SlidersHorizontal size={16} color={theme.textSecondary} strokeWidth={1.8} />
+                <ThemedText>表示モード</ThemedText>
+              </View>
+              <View style={styles.menuItemValue}>
+                <ThemedText type="small" themeColor="textSecondary">
+                  {viewMode.label}
+                </ThemedText>
+                <ChevronRight size={16} color={theme.textSecondary} strokeWidth={1.8} />
+              </View>
             </Pressable>
             <View style={[styles.menuDivider, { backgroundColor: theme.backgroundElement }]} />
             <Pressable
@@ -708,8 +770,11 @@ export function CalendarScreen() {
               }}
               accessibilityRole="button"
               style={({ pressed }) => [styles.menuItem, pressed && { opacity: 0.6 }]}>
-              <Settings size={16} color={theme.textSecondary} strokeWidth={1.8} />
-              <ThemedText>設定</ThemedText>
+              <View style={styles.menuItemLabel}>
+                <Settings size={16} color={theme.textSecondary} strokeWidth={1.8} />
+                <ThemedText>設定</ThemedText>
+              </View>
+              <ChevronRight size={16} color={theme.textSecondary} strokeWidth={1.8} />
             </Pressable>
           </GlassView>
         </Pressable>
@@ -734,62 +799,53 @@ const styles = StyleSheet.create({
     // Slimmer than ScreenContainer's default so calendar cells get the width.
     paddingHorizontal: Spacing.two,
   },
-  header: {
+  floatingHeader: {
+    position: 'absolute',
+    left: Spacing.two,
+    right: Spacing.two,
+    height: HEADER_BAR_HEIGHT,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: Spacing.one,
-    paddingTop: Spacing.two,
-    paddingBottom: Spacing.two,
+  },
+  titleGlass: {
+    height: HEADER_BAR_HEIGHT,
+    borderRadius: HEADER_BAR_HEIGHT / 2,
+    paddingHorizontal: Spacing.three + 2,
+    justifyContent: 'center',
   },
   headerActions: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.two,
   },
-  streakChip: {
-    paddingHorizontal: Spacing.two,
-    height: 32,
-    borderRadius: Radius.lg,
-    alignItems: 'center',
-    justifyContent: 'center',
+  todayGlass: {
+    height: 36,
+    borderRadius: 18,
   },
-  todayBtn: {
-    paddingHorizontal: Spacing.three,
-    height: 32,
-    borderRadius: Radius.lg,
-    alignItems: 'center',
-    justifyContent: 'center',
+  actionGlass: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
   },
-  actionBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  menuBackdrop: {
+  glassBtnInner: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: Spacing.two + 2,
   },
-  menuCard: {
+  weekdayStrip: {
     position: 'absolute',
-    right: Spacing.three,
-    minWidth: 200,
-    borderRadius: Radius.lg,
-    overflow: 'hidden',
-    paddingVertical: Spacing.one,
-  },
-  menuItem: {
+    left: Spacing.two,
+    right: Spacing.two,
+    height: WEEKDAY_STRIP_HEIGHT,
+    borderRadius: WEEKDAY_STRIP_HEIGHT / 2,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing.two,
-    paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.two + 2,
   },
-  menuDivider: {
-    height: StyleSheet.hairlineWidth,
-    marginHorizontal: Spacing.two,
+  statusText: {
+    textAlign: 'center',
+    paddingVertical: Spacing.two,
   },
   sheetFlex: {
     flex: 1,
@@ -860,14 +916,6 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.one,
     borderRadius: Spacing.four,
   },
-  statusRow: {
-    paddingHorizontal: Spacing.one,
-    paddingBottom: Spacing.one,
-  },
-  weekdayRow: {
-    flexDirection: 'row',
-    paddingBottom: Spacing.one,
-  },
   weekdayLabel: {
     flex: 1,
     textAlign: 'center',
@@ -876,14 +924,48 @@ const styles = StyleSheet.create({
   listContainer: {
     flex: 1,
   },
+  menuBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.15)',
+  },
+  menuCard: {
+    position: 'absolute',
+    right: Spacing.three,
+    minWidth: 200,
+    borderRadius: Radius.lg,
+    overflow: 'hidden',
+    paddingVertical: Spacing.one,
+  },
+  menuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: Spacing.three,
+    paddingHorizontal: Spacing.three,
+    paddingVertical: Spacing.two + 2,
+  },
+  menuItemLabel: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.two,
+  },
+  menuItemValue: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.one,
+  },
+  menuDivider: {
+    height: StyleSheet.hairlineWidth,
+    marginHorizontal: Spacing.two,
+  },
   fab: {
     position: 'absolute',
     right: Spacing.four,
   },
   fabGlass: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+    width: 60,
+    height: 60,
+    borderRadius: 30,
     alignItems: 'center',
     justifyContent: 'center',
   },
