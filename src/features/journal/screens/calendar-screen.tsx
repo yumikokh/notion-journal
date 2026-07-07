@@ -57,6 +57,7 @@ import {
   DIARY_TOGGLE_ICON,
   habitIcon,
 } from '@/features/journal/habit-icons';
+import { BOTTOM_BAR_HEIGHT } from '@/components/app-tabs';
 import { useMonthEntries } from '@/features/journal/use-month-entries';
 import { QuickCaptureSheet } from '@/features/today/components/quick-capture-sheet';
 import { formatTimeLabel } from '@/features/today/today-log';
@@ -962,9 +963,10 @@ const styles = StyleSheet.create({
     right: Spacing.four,
   },
   fabGlass: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
+    // Same diameter as the bottom bar so the two read as one row of glass.
+    width: BOTTOM_BAR_HEIGHT,
+    height: BOTTOM_BAR_HEIGHT,
+    borderRadius: BOTTOM_BAR_HEIGHT / 2,
     alignItems: 'center',
     justifyContent: 'center',
   },
