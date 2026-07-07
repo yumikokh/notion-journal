@@ -2,7 +2,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { Image as CoverImage } from 'expo-image';
 import { SaveFormat, manipulateAsync } from 'expo-image-manipulator';
 import * as ImagePicker from 'expo-image-picker';
-import { Sparkles, Trash2 } from 'lucide-react-native';
+import { Camera, Check, PenLine, Sparkles, Trash2, X } from 'lucide-react-native';
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -21,7 +21,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { MarkdownView } from '@/components/markdown-view';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { Spacing } from '@/constants/theme';
+import { Radius, Spacing } from '@/constants/theme';
 import { buildDayCalendarContext } from '@/features/calendar/calendar-context';
 import { DayEventsSection } from '@/features/calendar/components/day-events-section';
 import { useDayEvents } from '@/features/calendar/use-day-events';
@@ -110,11 +110,6 @@ function DayDrawerContent({
   const theme = useTheme();
   const envOk = isSupabaseEnvConfigured();
   const queryClient = useQueryClient();
-  // AI button uses the high-contrast "filled" treatment — black in light
-  // mode, white in dark mode — matching the primary 保存 button so both
-  // primary actions feel like first-class buttons.
-  const aiBg = theme.text;
-  const aiFg = theme.background;
 
   const dateObj = useMemo(() => new Date(`${date}T00:00:00`), [date]);
 
@@ -389,13 +384,11 @@ function DayDrawerContent({
                   style={[
                     styles.saveBtn,
                     {
-                      backgroundColor: theme.text,
+                      backgroundColor: theme.accent,
                       opacity: isSaving ? 0.5 : 1,
                     },
                   ]}>
-                  <ThemedText
-                    type="smallBold"
-                    style={{ color: theme.background }}>
+                  <ThemedText type="smallBold" style={styles.saveBtnText}>
                     {isSaving ? '保存中…' : '保存'}
                   </ThemedText>
                 </Pressable>
@@ -405,10 +398,8 @@ function DayDrawerContent({
                 accessibilityRole="button"
                 accessibilityLabel="閉じる"
                 hitSlop={8}
-                style={styles.closeBtn}>
-                <ThemedText type="subtitle" themeColor="textSecondary">
-                  ✕
-                </ThemedText>
+                style={[styles.closeBtn, { backgroundColor: theme.backgroundElement }]}>
+                <X size={16} color={theme.textSecondary} strokeWidth={2} />
               </Pressable>
             </View>
           </View>
@@ -430,27 +421,27 @@ function DayDrawerContent({
                 ]}>
                 {entry.error && (
                   <ThemedText type="small" style={[styles.errorText, { color: theme.danger }]}>
-                    📥 読み込み: {entry.error.message}
+                    読み込み: {entry.error.message}
                   </ThemedText>
                 )}
                 {saveAll.error && (
                   <ThemedText type="small" style={[styles.errorText, { color: theme.danger }]}>
-                    💾 保存: {saveAll.error.message}
+                    保存: {saveAll.error.message}
                   </ThemedText>
                 )}
                 {uploadCover.error && (
                   <ThemedText type="small" style={[styles.errorText, { color: theme.danger }]}>
-                    🖼️ カバー: {uploadCover.error.message}
+                    カバー: {uploadCover.error.message}
                   </ThemedText>
                 )}
                 {removeCover.error && (
                   <ThemedText type="small" style={[styles.errorText, { color: theme.danger }]}>
-                    🗑️ カバー削除: {removeCover.error.message}
+                    カバー削除: {removeCover.error.message}
                   </ThemedText>
                 )}
                 {ai.error && (
                   <ThemedText type="small" style={[styles.errorText, { color: theme.danger }]}>
-                    ✨ AI: {ai.error.message}
+                    AIまとめ: {ai.error.message}
                   </ThemedText>
                 )}
               </View>
@@ -499,13 +490,10 @@ function DayDrawerContent({
                   </Pressable>
                 </View>
               ) : (
-                <View
-                  style={[
-                    styles.coverEmpty,
-                    { backgroundColor: theme.backgroundElement },
-                  ]}>
+                <View style={[styles.coverEmpty, { borderColor: theme.backgroundSelected }]}>
+                  <Camera size={20} color={theme.textSecondary} strokeWidth={1.6} />
                   <ThemedText type="small" themeColor="textSecondary">
-                    📷 カバー写真を選ぶ
+                    カバー写真を選ぶ
                   </ThemedText>
                 </View>
               )}
@@ -527,35 +515,37 @@ function DayDrawerContent({
 
               {/* DIARY — inline TextInput, AI button always visible */}
               <View style={styles.diaryGroup}>
+                <View style={styles.sectionHeader}>
+                  <ThemedText type="smallBold" themeColor="textSecondary">
+                    DIARY
+                  </ThemedText>
+                  <Pressable
+                    onPress={handleAi}
+                    disabled={!canAi}
+                    accessibilityRole="button"
+                    accessibilityState={{ disabled: !canAi, busy: ai.isPending }}
+                    style={[
+                      styles.aiBtn,
+                      { backgroundColor: theme.accentSoft, opacity: canAi ? 1 : 0.5 },
+                    ]}>
+                    <Sparkles size={13} color={theme.accent} strokeWidth={2} />
+                    <ThemedText type="smallBold" style={{ color: theme.accent }}>
+                      {ai.isPending ? 'まとめ中…' : '本文からまとめる'}
+                    </ThemedText>
+                  </Pressable>
+                </View>
                 <TextInput
                   multiline
                   textAlignVertical="top"
                   value={draft.diary}
                   onChangeText={(value) => onAction({ type: 'set-diary', value })}
-                  placeholder="DIARY（AIで本文をまとめてここに）"
+                  placeholder="今日をひとことで（✨で本文からまとめられます）"
                   placeholderTextColor={theme.textSecondary}
                   style={[
                     styles.diaryInput,
                     { color: theme.text, backgroundColor: theme.backgroundElement },
                   ]}
                 />
-                <Pressable
-                  onPress={handleAi}
-                  disabled={!canAi}
-                  accessibilityRole="button"
-                  accessibilityState={{ disabled: !canAi, busy: ai.isPending }}
-                  style={[
-                    styles.aiBtn,
-                    {
-                      backgroundColor: aiBg,
-                      opacity: canAi ? 1 : 0.5,
-                    },
-                  ]}>
-                  <Sparkles size={14} color={aiFg} strokeWidth={2} />
-                  <ThemedText type="smallBold" style={{ color: aiFg }}>
-                    {ai.isPending ? '整理中…' : '本文を DIARY にまとめる'}
-                  </ThemedText>
-                </Pressable>
               </View>
 
               {/* 予定 — Google Calendar; renders nothing when disconnected */}
@@ -563,11 +553,8 @@ function DayDrawerContent({
 
               {/* 本文 — only section with header + view/edit toggle */}
               <View style={styles.bodySection}>
-                <View style={styles.bodyHeader}>
-                  <ThemedText
-                    type="smallBold"
-                    themeColor="textSecondary"
-                    style={styles.bodyLabel}>
+                <View style={styles.sectionHeader}>
+                  <ThemedText type="smallBold" themeColor="textSecondary">
                     本文
                   </ThemedText>
                   <Pressable
@@ -581,8 +568,13 @@ function DayDrawerContent({
                       styles.bodyToggle,
                       { backgroundColor: theme.backgroundElement },
                     ]}>
-                    <ThemedText type="smallBold">
-                      {bodyMode === 'view' ? '✎ 編集' : '✓ 完了'}
+                    {bodyMode === 'view' ? (
+                      <PenLine size={13} color={theme.textSecondary} strokeWidth={2} />
+                    ) : (
+                      <Check size={13} color={theme.textSecondary} strokeWidth={2.5} />
+                    )}
+                    <ThemedText type="smallBold" themeColor="textSecondary">
+                      {bodyMode === 'view' ? '編集' : '完了'}
                     </ThemedText>
                   </Pressable>
                 </View>
@@ -757,21 +749,37 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   saveBtn: {
-    paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.one,
-    borderRadius: Spacing.two,
+    height: 32,
+    paddingHorizontal: Spacing.three + 2,
+    borderRadius: Radius.lg,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  saveBtnText: {
+    color: '#ffffff',
   },
   closeBtn: {
-    paddingHorizontal: Spacing.one,
-    paddingVertical: 0,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   scrollContent: {
     paddingBottom: Spacing.five,
     gap: Spacing.four,
   },
-  // Cover — full bleed, no horizontal padding
-  coverPressable: { width: '100%' },
-  coverWrap: { width: '100%', position: 'relative' },
+  // Cover — a rounded card, aligned with the body's horizontal rhythm.
+  coverPressable: {
+    width: '100%',
+    paddingHorizontal: Spacing.four,
+  },
+  coverWrap: {
+    width: '100%',
+    position: 'relative',
+    borderRadius: Radius.lg,
+    overflow: 'hidden',
+  },
   coverImage: {
     width: '100%',
     aspectRatio: 16 / 9,
@@ -779,9 +787,13 @@ const styles = StyleSheet.create({
   },
   coverEmpty: {
     width: '100%',
-    aspectRatio: 16 / 9,
+    height: 96,
+    borderRadius: Radius.lg,
+    borderWidth: 1.5,
+    borderStyle: 'dashed',
     alignItems: 'center',
     justifyContent: 'center',
+    gap: Spacing.one,
   },
   coverBadge: {
     position: 'absolute',
@@ -808,44 +820,48 @@ const styles = StyleSheet.create({
     gap: Spacing.four,
   },
 
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    minHeight: 30,
+  },
   diaryGroup: { gap: Spacing.two },
   diaryInput: {
-    minHeight: 80,
+    minHeight: 88,
     padding: Spacing.three,
-    borderRadius: Spacing.two,
+    borderRadius: Radius.lg,
     fontSize: 15,
     lineHeight: 22,
   },
   aiBtn: {
     flexDirection: 'row',
     gap: Spacing.one,
-    paddingVertical: Spacing.three,
-    borderRadius: Spacing.two,
+    height: 30,
+    paddingHorizontal: Spacing.three,
+    borderRadius: Radius.lg,
     alignItems: 'center',
     justifyContent: 'center',
   },
 
   bodySection: { gap: Spacing.two },
-  bodyHeader: {
+  bodyToggle: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  bodyLabel: { textTransform: 'uppercase' },
-  bodyToggle: {
+    gap: 4,
+    height: 30,
     paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.one,
-    borderRadius: Spacing.two,
+    borderRadius: Radius.lg,
   },
   viewBlock: {
     padding: Spacing.three,
-    borderRadius: Spacing.two,
+    borderRadius: Radius.lg,
     minHeight: 80,
   },
   freeText: {
     minHeight: 240,
     padding: Spacing.three,
-    borderRadius: Spacing.two,
+    borderRadius: Radius.lg,
     fontSize: 16,
     lineHeight: 24,
   },
@@ -859,7 +875,7 @@ const styles = StyleSheet.create({
 
   errorBanner: {
     padding: Spacing.three,
-    borderRadius: Spacing.two,
+    borderRadius: Radius.lg,
     gap: Spacing.one,
     borderLeftWidth: 3,
   },
@@ -873,7 +889,7 @@ const styles = StyleSheet.create({
   },
   conflictBox: {
     padding: Spacing.four,
-    borderRadius: Spacing.three,
+    borderRadius: Radius.xl,
     gap: Spacing.three,
     maxWidth: 560,
     alignSelf: 'center',
@@ -881,7 +897,7 @@ const styles = StyleSheet.create({
   },
   conflictPreview: {
     padding: Spacing.three,
-    borderRadius: Spacing.two,
+    borderRadius: Radius.lg,
     gap: Spacing.one,
     maxHeight: 240,
   },
@@ -896,7 +912,7 @@ const styles = StyleSheet.create({
     minWidth: 110,
     paddingVertical: Spacing.three,
     paddingHorizontal: Spacing.three,
-    borderRadius: Spacing.two,
+    borderRadius: Radius.lg,
     alignItems: 'center',
   },
   conflictBtnDanger: { color: '#ffffff' },
