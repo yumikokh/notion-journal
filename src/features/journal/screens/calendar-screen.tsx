@@ -774,7 +774,6 @@ export function CalendarScreen() {
                 <Settings size={16} color={theme.textSecondary} strokeWidth={1.8} />
                 <ThemedText>設定</ThemedText>
               </View>
-              <ChevronRight size={16} color={theme.textSecondary} strokeWidth={1.8} />
             </Pressable>
           </GlassView>
         </Pressable>
