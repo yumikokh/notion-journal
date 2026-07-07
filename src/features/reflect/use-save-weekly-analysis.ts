@@ -68,6 +68,8 @@ export function useSaveWeeklyAnalysis(range: WeekRange) {
         ['weekly-reflection', saved.weekStart, saved.weekEnd],
         saved,
       );
+      // The week picker's reflected marks come from the list query.
+      qc.invalidateQueries({ queryKey: ['weekly-reflection', 'list'] });
     },
   });
 }

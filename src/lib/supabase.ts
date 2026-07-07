@@ -141,6 +141,15 @@ export function invokeNotionMonthGet(payload: { yearMonth: string }) {
   return invoke<{ entries: MonthEntry[] }>('notion-month-get', payload);
 }
 
+/**
+ * Date of the earliest Daily entry (YYYY-MM-DD; null when the DB is empty).
+ * Anchors the week/month pickers to the user's real journaling history
+ * instead of an arbitrary rolling window.
+ */
+export function invokeNotionJournalRange() {
+  return invoke<{ earliest: string | null }>('notion-journal-range', {});
+}
+
 export function invokeAiWeeklyAnalyze(payload: { weekStart: string; weekEnd: string }) {
   return invoke<unknown>('ai-weekly-analyze', payload);
 }
@@ -157,6 +166,15 @@ export function invokeAiWeeklyAnalyze(payload: { weekStart: string; weekEnd: str
  */
 export function invokeNotionWeeklyGet(payload: { weekStart: string; weekEnd: string }) {
   return invoke<{ page: NotionPage | null; bodyMarkdown?: string }>('notion-weekly-get', payload);
+}
+
+/**
+ * List the Date property of every saved weekly reflection (Type=Weekly in
+ * the Reflection DB). Dates may fall on any day inside their week; callers
+ * normalize them to Monday keys. Backs the week picker's reflected marks.
+ */
+export function invokeNotionWeeklyList() {
+  return invoke<{ dates: string[] }>('notion-weekly-list', {});
 }
 
 /**

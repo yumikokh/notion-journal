@@ -1,14 +1,12 @@
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
-import { Check, ChevronDown, ChevronLeft, ChevronRight, Plus } from 'lucide-react-native';
+import { ChevronDown, ChevronLeft, Plus } from 'lucide-react-native';
 import { useCallback, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
-  Modal,
   Pressable,
   RefreshControl,
-  ScrollView,
   StyleSheet,
   View,
   useColorScheme,
@@ -20,6 +18,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
+import { WheelPicker } from '@/components/wheel-picker';
+import { WheelSheet } from '@/components/wheel-sheet';
 import { Radius, Spacing } from '@/constants/theme';
 import { coverImageSource } from '@/features/journal/cover-image';
 import { DayDrawer } from '@/features/journal/components/day-drawer';
@@ -28,8 +28,10 @@ import {
   buildMonthDayItems,
   buildMonthOptions,
   formatMonthHeader,
+  monthsSince,
   type JournalDayItem,
 } from '@/features/journal/journal-list';
+import { useJournalRange } from '@/features/journal/use-journal-range';
 import { useMonthEntries } from '@/features/journal/use-month-entries';
 import { notionChipColor } from '@/features/notion/colors';
 import { useTheme } from '@/hooks/use-theme';
@@ -43,26 +45,54 @@ const MAX_MONTHS_BACK = 24;
 
 /**
  * Journal list, one month per page — swiped horizontally like flipping
- * through a book. The header offers ‹ › for single flips and a month picker
- * (tap the title) for long jumps. Pages are chronological (oldest on the
- * left) so swiping toward the right edge moves back in time, matching the
- * calendar's "up = past" direction.
+ * through a book. Pages are chronological (oldest on the left) so swiping
+ * toward the right edge moves back in time, matching the calendar's
+ * "up = past" direction. The range runs from the first journal entry to
+ * the current month, so the picker's bound is the data itself.
  */
 export function JournalListScreen() {
   const theme = useTheme();
-  const router = useRouter();
-  const scheme = useColorScheme() === 'dark' ? 'dark' : 'light';
   const envOk = isSupabaseEnvConfigured();
 
   const currentYearMonth = useMemo(() => {
     const now = new Date();
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
   }, []);
+
+  // Resolve the range before mounting the pager — its page indices must not
+  // shift underneath the FlatList once rendered.
+  const journalRange = useJournalRange({ enabled: envOk });
   /** Oldest → newest so page order matches the timeline. */
-  const months = useMemo(
-    () => buildMonthOptions(currentYearMonth, MAX_MONTHS_BACK).reverse(),
-    [currentYearMonth],
-  );
+  const months = useMemo(() => {
+    const back = journalRange.data
+      ? monthsSince(journalRange.data, currentYearMonth)
+      : MAX_MONTHS_BACK;
+    return buildMonthOptions(currentYearMonth, back).reverse();
+  }, [journalRange.data, currentYearMonth]);
+
+  if (journalRange.isLoading) {
+    return (
+      <ThemedView style={styles.root}>
+        <SafeAreaView style={styles.safeArea} edges={['top']}>
+          <View style={styles.rangeLoading}>
+            <ActivityIndicator color={theme.textSecondary} />
+          </View>
+        </SafeAreaView>
+      </ThemedView>
+    );
+  }
+
+  // Keyed by the range start so a late change (e.g. backfilled history)
+  // remounts the pager instead of shifting indices under it.
+  return <JournalListPager key={months[0]} months={months} />;
+}
+
+/** The swipeable pager over a fixed, already-resolved list of months. */
+function JournalListPager({ months }: { months: string[] }) {
+  const theme = useTheme();
+  const router = useRouter();
+  const scheme = useColorScheme() === 'dark' ? 'dark' : 'light';
+  const envOk = isSupabaseEnvConfigured();
 
   const [pageIndex, setPageIndex] = useState(months.length - 1);
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -70,8 +100,6 @@ export function JournalListScreen() {
   const pagerRef = useRef<FlatList<string>>(null);
   const yearMonth = months[pageIndex];
 
-  const atOldest = pageIndex === 0;
-  const atNewest = pageIndex === months.length - 1;
 
   const goTo = useCallback(
     (index: number, animated: boolean) => {
@@ -81,16 +109,43 @@ export function JournalListScreen() {
     },
     [months.length],
   );
-  const goPrev = useCallback(() => goTo(pageIndex - 1, true), [goTo, pageIndex]);
-  const goNext = useCallback(() => goTo(pageIndex + 1, true), [goTo, pageIndex]);
-  const selectMonth = useCallback(
-    (month: string) => {
-      setPickerOpen(false);
-      const index = months.indexOf(month);
-      if (index >= 0) goTo(index, false);
-    },
-    [months, goTo],
+
+  // 年 / 月 columns for the picker sheet; committed only via この月へ.
+  const pickerYears = useMemo(
+    () => [...new Set(months.map((m) => Number(m.slice(0, 4))))],
+    [months],
   );
+  const monthsOf = useCallback(
+    (year: number) =>
+      months
+        .filter((m) => Number(m.slice(0, 4)) === year)
+        .map((m) => Number(m.slice(5, 7))),
+    [months],
+  );
+  const [selYear, setSelYear] = useState(() => Number(yearMonth.slice(0, 4)));
+  const [selMonth, setSelMonth] = useState(() => Number(yearMonth.slice(5, 7)));
+  const openPicker = () => {
+    setSelYear(Number(yearMonth.slice(0, 4)));
+    setSelMonth(Number(yearMonth.slice(5, 7)));
+    setPickerOpen(true);
+  };
+  const handleYear = (year: number) => {
+    const options = monthsOf(year);
+    setSelYear(year);
+    if (!options.includes(selMonth)) {
+      // Snap to the nearest month available in the newly picked year.
+      setSelMonth(
+        options.reduce((best, m) =>
+          Math.abs(m - selMonth) < Math.abs(best - selMonth) ? m : best,
+        ),
+      );
+    }
+  };
+  const confirmMonth = () => {
+    const key = `${selYear}-${String(selMonth).padStart(2, '0')}`;
+    const i = months.indexOf(key);
+    if (i >= 0) goTo(i, false);
+  };
 
   // Keep the header in sync when the user swipes instead of using buttons.
   const onMomentumScrollEnd = useCallback(
@@ -149,32 +204,16 @@ export function JournalListScreen() {
           style={styles.headerSide}>
           <ChevronLeft size={24} color={theme.text} strokeWidth={2} />
         </Pressable>
+        {/* Single-month flips are covered by swiping the pager itself, so
+            the header keeps just the picker entry — no ‹ › clutter. */}
         <View style={styles.monthNav}>
           <Pressable
-            onPress={goPrev}
-            disabled={atOldest}
-            accessibilityRole="button"
-            accessibilityLabel="前の月"
-            hitSlop={8}
-            style={[styles.monthNavBtn, { opacity: atOldest ? 0.3 : 1 }]}>
-            <ChevronLeft size={18} color={theme.textSecondary} strokeWidth={2} />
-          </Pressable>
-          <Pressable
-            onPress={() => setPickerOpen(true)}
+            onPress={openPicker}
             accessibilityRole="button"
             accessibilityLabel="月を選択"
             style={styles.monthTitle}>
             <ThemedText type="subtitle">{formatMonthHeader(yearMonth)}</ThemedText>
             <ChevronDown size={16} color={theme.textSecondary} strokeWidth={2} />
-          </Pressable>
-          <Pressable
-            onPress={goNext}
-            disabled={atNewest}
-            accessibilityRole="button"
-            accessibilityLabel="次の月"
-            hitSlop={8}
-            style={[styles.monthNavBtn, { opacity: atNewest ? 0.3 : 1 }]}>
-            <ChevronRight size={18} color={theme.textSecondary} strokeWidth={2} />
           </Pressable>
         </View>
         <View style={styles.headerSide} />
@@ -206,47 +245,32 @@ export function JournalListScreen() {
         )}
       </View>
 
-      <Modal
+      <WheelSheet
         visible={pickerOpen}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setPickerOpen(false)}>
-        <Pressable
-          style={styles.pickerOverlay}
-          accessibilityLabel="月の選択を閉じる"
-          onPress={() => setPickerOpen(false)}>
-          {/* Stop overlay-press from closing when tapping inside the sheet. */}
-          <Pressable
-            style={[styles.pickerSheet, { backgroundColor: theme.background }]}
-            onPress={(e) => e.stopPropagation()}>
-            <ThemedText type="smallBold" themeColor="textSecondary" style={styles.pickerTitle}>
-              月を選択
-            </ThemedText>
-            <ScrollView style={styles.pickerScroll}>
-              {[...months].reverse().map((month) => {
-                const selected = month === yearMonth;
-                return (
-                  <Pressable
-                    key={month}
-                    onPress={() => selectMonth(month)}
-                    accessibilityRole="button"
-                    accessibilityState={{ selected }}
-                    style={({ pressed }) => [
-                      styles.pickerRow,
-                      selected && { backgroundColor: theme.accentSoft },
-                      pressed && { opacity: 0.6 },
-                    ]}>
-                    <ThemedText style={selected ? { color: theme.accent } : undefined}>
-                      {formatMonthHeader(month)}
-                    </ThemedText>
-                    {selected && <Check size={16} color={theme.accent} strokeWidth={2.5} />}
-                  </Pressable>
-                );
-              })}
-            </ScrollView>
-          </Pressable>
-        </Pressable>
-      </Modal>
+        title="月を選択"
+        confirmLabel="この月へ"
+        onConfirm={confirmMonth}
+        onClose={() => setPickerOpen(false)}>
+        <View style={styles.pickerColumns}>
+          <View style={styles.pickerColumn}>
+            <WheelPicker
+              align="right"
+              items={pickerYears.map((y) => ({ key: String(y), label: `${y}年` }))}
+              initialIndex={Math.max(0, pickerYears.indexOf(selYear))}
+              onChange={(i) => handleYear(pickerYears[i])}
+            />
+          </View>
+          <View style={styles.pickerColumn}>
+            <WheelPicker
+              key={`m-${selYear}`}
+              align="left"
+              items={monthsOf(selYear).map((m) => ({ key: String(m), label: `${m}月` }))}
+              initialIndex={Math.max(0, monthsOf(selYear).indexOf(selMonth))}
+              onChange={(i) => setSelMonth(monthsOf(selYear)[i])}
+            />
+          </View>
+        </View>
+      </WheelSheet>
 
         <DayDrawer date={drawerDate} onClose={closeDrawer} feelingColors={feelingColorMap} />
       </SafeAreaView>
@@ -464,12 +488,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: Spacing.two,
   },
-  monthNavBtn: {
-    width: 28,
-    height: 28,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   monthTitle: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -502,31 +520,17 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     paddingVertical: Spacing.five,
   },
-  pickerOverlay: {
+  rangeLoading: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.4)',
-    justifyContent: 'center',
-    padding: Spacing.five,
-  },
-  pickerSheet: {
-    borderRadius: Radius.xl,
-    paddingVertical: Spacing.three,
-    maxHeight: '60%',
-  },
-  pickerTitle: {
-    textAlign: 'center',
-    paddingBottom: Spacing.two,
-  },
-  pickerScroll: {
-    paddingHorizontal: Spacing.two,
-  },
-  pickerRow: {
-    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.two + 2,
-    borderRadius: Radius.md,
+    justifyContent: 'center',
+  },
+  pickerColumns: {
+    flexDirection: 'row',
+    paddingHorizontal: Spacing.five,
+  },
+  pickerColumn: {
+    flex: 1,
   },
   card: {
     borderRadius: Radius.lg,

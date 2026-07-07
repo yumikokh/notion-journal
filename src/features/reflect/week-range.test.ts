@@ -3,11 +3,15 @@ import { describe, expect, it } from '@jest/globals';
 import {
   formatWeekLabel,
   getWeekRange,
+  groupWeeksByMonth,
   isSameWeek,
   listRecentWeeks,
+  listWeeksSince,
   relativeWeekLabel,
   shiftWeek,
   weekElapsedDays,
+  weekName,
+  weekStartOf,
 } from './week-range';
 
 describe('getWeekRange', () => {
@@ -102,6 +106,49 @@ describe('formatWeekLabel', () => {
   });
 });
 
+describe('weekName', () => {
+  it('numbers weeks by their Monday within the month', () => {
+    expect(weekName({ start: '2026-07-06', end: '2026-07-12' })).toBe('7月 第1週');
+    expect(weekName({ start: '2026-07-13', end: '2026-07-19' })).toBe('7月 第2週');
+    expect(weekName({ start: '2026-07-27', end: '2026-08-02' })).toBe('7月 第4週');
+  });
+
+  it('assigns a month-crossing week to its Monday month', () => {
+    expect(weekName({ start: '2026-06-29', end: '2026-07-05' })).toBe('6月 第5週');
+    expect(weekName({ start: '2025-12-29', end: '2026-01-04' })).toBe('12月 第5週');
+  });
+
+  it('treats a Monday on the 1st as 第1週', () => {
+    expect(weekName({ start: '2026-06-01', end: '2026-06-07' })).toBe('6月 第1週');
+  });
+});
+
+describe('listWeeksSince', () => {
+  // 2026-06-05 is a Friday; its week starts Monday 2026-06-01.
+  const today = new Date(2026, 5, 5);
+
+  it('spans from the earliest entry week to the current week', () => {
+    const weeks = listWeeksSince('2026-05-20', today); // Wed → week of 5/18
+    expect(weeks[0]).toEqual({ start: '2026-05-18', end: '2026-05-24' });
+    expect(weeks[weeks.length - 1]).toEqual({ start: '2026-06-01', end: '2026-06-07' });
+    expect(weeks).toHaveLength(3);
+  });
+
+  it('returns just the current week when earliest is inside it', () => {
+    expect(listWeeksSince('2026-06-03', today)).toEqual([
+      { start: '2026-06-01', end: '2026-06-07' },
+    ]);
+  });
+});
+
+describe('weekStartOf', () => {
+  it('returns the Monday of the containing week', () => {
+    expect(weekStartOf('2026-07-05')).toBe('2026-06-29'); // Sunday → its Monday
+    expect(weekStartOf('2026-07-06')).toBe('2026-07-06'); // Monday → itself
+    expect(weekStartOf('2026-07-09')).toBe('2026-07-06'); // mid-week
+  });
+});
+
 describe('listRecentWeeks', () => {
   // 2026-06-05 is a Friday; its week starts Monday 2026-06-01.
   const today = new Date(2026, 5, 5);
@@ -121,6 +168,28 @@ describe('listRecentWeeks', () => {
     for (let i = 1; i < weeks.length; i++) {
       expect(weeks[i]).toEqual(shiftWeek(weeks[i - 1], 1));
     }
+  });
+});
+
+describe('groupWeeksByMonth', () => {
+  it('groups consecutive weeks by their Monday month, oldest first', () => {
+    const weeks = [
+      { start: '2025-12-22', end: '2025-12-28' },
+      { start: '2025-12-29', end: '2026-01-04' }, // year-crossing → 2025-12
+      { start: '2026-01-05', end: '2026-01-11' },
+      { start: '2026-01-12', end: '2026-01-18' },
+    ];
+    const groups = groupWeeksByMonth(weeks);
+    expect(groups.map((g) => [g.year, g.month])).toEqual([
+      [2025, 12],
+      [2026, 1],
+    ]);
+    expect(groups[0].weeks.map((w) => w.start)).toEqual(['2025-12-22', '2025-12-29']);
+    expect(groups[1].weeks.map((w) => w.start)).toEqual(['2026-01-05', '2026-01-12']);
+  });
+
+  it('handles an empty list', () => {
+    expect(groupWeeksByMonth([])).toEqual([]);
   });
 });
 

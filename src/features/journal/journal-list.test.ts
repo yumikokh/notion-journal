@@ -4,6 +4,7 @@ import {
   buildMonthDayItems,
   buildMonthOptions,
   formatMonthHeader,
+  monthsSince,
   shiftYearMonth,
 } from './journal-list';
 import type { MonthEntry } from '@/lib/supabase';
@@ -82,5 +83,17 @@ describe('buildMonthOptions', () => {
 
   it('crosses year boundaries', () => {
     expect(buildMonthOptions('2026-01', 2)).toEqual(['2026-01', '2025-12', '2025-11']);
+  });
+});
+
+describe('monthsSince', () => {
+  it('counts whole months from the earliest entry to the current month', () => {
+    expect(monthsSince('2026-05-09', '2026-07')).toBe(2);
+    expect(monthsSince('2026-07-01', '2026-07')).toBe(0);
+  });
+
+  it('crosses year boundaries and never goes negative', () => {
+    expect(monthsSince('2024-11-30', '2026-07')).toBe(20);
+    expect(monthsSince('2026-08-01', '2026-07')).toBe(0);
   });
 });

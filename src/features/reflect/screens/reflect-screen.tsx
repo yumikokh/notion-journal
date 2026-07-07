@@ -16,6 +16,7 @@ import { ScreenContainer } from '@/components/screen-container';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { BottomTabInset, Spacing } from '@/constants/theme';
+import { useJournalRange } from '@/features/journal/use-journal-range';
 import { useTheme } from '@/hooks/use-theme';
 import { isSupabaseEnvConfigured } from '@/lib/env';
 
@@ -26,28 +27,66 @@ import { WeekPicker } from '../components/week-picker';
 import { useSaveWeeklyAnalysis } from '../use-save-weekly-analysis';
 import { useWeeklyAnalysis } from '../use-weekly-analysis';
 import { useWeeklyReflection } from '../use-weekly-reflection';
-import { listRecentWeeks, type WeekRange } from '../week-range';
+import { listRecentWeeks, listWeeksSince, type WeekRange } from '../week-range';
 import { hasSavedReflection } from '../weekly-reflection';
 
-/** How far back the pager reaches (~2 years, like the calendar's 24 months). */
+/** Fallback reach when the earliest-entry date is unknown (~2 years). */
 const MAX_WEEKS_BACK = 104;
 
 /**
  * Weekly reflection, one week per page — swiped horizontally like the
- * journal list. Pages are chronological (oldest on the left) so swiping
- * toward the right edge moves back in time; the WeekPicker's ‹ › buttons
- * flip single pages. The newest page is the current week.
+ * journal list. The range runs from the user's first journal entry to the
+ * current week, so the picker's bound is the data itself rather than an
+ * arbitrary window.
  */
 export function ReflectScreen() {
   const envOk = isSupabaseEnvConfigured();
   const today = useMemo(() => new Date(), []);
-  /** Oldest → newest; the last entry is the current week. */
-  const weeks = useMemo(() => listRecentWeeks(today, MAX_WEEKS_BACK + 1), [today]);
 
+  // Resolve the range before mounting the pager — its page indices must not
+  // shift underneath the FlatList once rendered.
+  const journalRange = useJournalRange({ enabled: envOk });
+  /** Oldest → newest; the last entry is the current week. */
+  const weeks = useMemo(
+    () =>
+      journalRange.data
+        ? listWeeksSince(journalRange.data, today)
+        : listRecentWeeks(today, MAX_WEEKS_BACK + 1),
+    [journalRange.data, today],
+  );
+
+  if (!envOk) {
+    return (
+      <ScreenContainer>
+        <View style={styles.empty}>
+          <ThemedText themeColor="textSecondary">
+            Supabase の環境変数が未設定です。`.env.local` を確認してください。
+          </ThemedText>
+        </View>
+      </ScreenContainer>
+    );
+  }
+
+  if (journalRange.isLoading) {
+    return (
+      <ScreenContainer>
+        <View style={styles.empty}>
+          <ActivityIndicator />
+        </View>
+      </ScreenContainer>
+    );
+  }
+
+  // Keyed by the range start so a late change (e.g. backfilled history)
+  // remounts the pager instead of shifting indices under it.
+  return <ReflectPager key={weeks[0].start} weeks={weeks} today={today} />;
+}
+
+/** The swipeable pager over a fixed, already-resolved list of weeks. */
+function ReflectPager({ weeks, today }: { weeks: WeekRange[]; today: Date }) {
   const [pageIndex, setPageIndex] = useState(weeks.length - 1);
   const [pageWidth, setPageWidth] = useState(0);
   const pagerRef = useRef<FlatList<WeekRange>>(null);
-  const range = weeks[pageIndex];
 
   // Track every week the user has explicitly asked to analyze. Weeks are
   // remembered here (not in page-local state) because the pager unmounts
@@ -72,10 +111,10 @@ export function ReflectScreen() {
   }, []);
 
   const goTo = useCallback(
-    (index: number) => {
+    (index: number, animated: boolean) => {
       const clamped = Math.max(0, Math.min(weeks.length - 1, index));
       setPageIndex(clamped);
-      pagerRef.current?.scrollToIndex({ index: clamped, animated: true });
+      pagerRef.current?.scrollToIndex({ index: clamped, animated });
     },
     [weeks.length],
   );
@@ -104,18 +143,6 @@ export function ReflectScreen() {
     [today, pageWidth, analyzedWeeks, markAnalyzed, clearAnalyzed],
   );
 
-  if (!envOk) {
-    return (
-      <ScreenContainer>
-        <View style={styles.empty}>
-          <ThemedText themeColor="textSecondary">
-            Supabase の環境変数が未設定です。`.env.local` を確認してください。
-          </ThemedText>
-        </View>
-      </ScreenContainer>
-    );
-  }
-
   return (
     // Custom shell without horizontal padding: the pager must span the full
     // screen width so pages flip edge-to-edge; each page carries its own
@@ -123,13 +150,7 @@ export function ReflectScreen() {
     <ThemedView style={styles.root}>
       <SafeAreaView style={styles.safeArea} edges={['top']}>
         <View style={styles.header}>
-          <WeekPicker
-            range={range}
-            today={today}
-            canGoNext={pageIndex < weeks.length - 1}
-            onPrev={() => goTo(pageIndex - 1)}
-            onNext={() => goTo(pageIndex + 1)}
-          />
+          <WeekPicker weeks={weeks} index={pageIndex} today={today} onSelect={goTo} />
         </View>
 
         <View
@@ -364,8 +385,7 @@ const styles = StyleSheet.create({
   },
   header: {
     paddingHorizontal: Spacing.four,
-    paddingTop: Spacing.three,
-    paddingBottom: Spacing.two,
+    paddingVertical: Spacing.two,
   },
   pagerContainer: {
     flex: 1,

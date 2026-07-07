@@ -70,3 +70,14 @@ export function buildMonthOptions(currentYearMonth: string, monthsBack: number):
   }
   return options;
 }
+
+/**
+ * Whole months from the month containing `earliest` (a YYYY-MM-DD key,
+ * e.g. the first journal entry) up to `currentYearMonth` (YYYY-MM) — the
+ * data-driven `monthsBack` for the month pager and picker.
+ */
+export function monthsSince(earliest: string, currentYearMonth: string): number {
+  const [ey, em] = earliest.split('-').map(Number);
+  const [cy, cm] = currentYearMonth.split('-').map(Number);
+  return Math.max(0, (cy - ey) * 12 + (cm - em));
+}
