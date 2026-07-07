@@ -5,7 +5,6 @@ import {
   ChevronRight,
   LayoutList,
   MoreHorizontal,
-  PenLine,
   RotateCw,
   Settings,
   SlidersHorizontal,
@@ -13,7 +12,6 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Animated,
   FlatList,
   KeyboardAvoidingView,
@@ -57,11 +55,7 @@ import {
   DIARY_TOGGLE_ICON,
   habitIcon,
 } from '@/features/journal/habit-icons';
-import { BOTTOM_BAR_HEIGHT } from '@/components/app-tabs';
 import { useMonthEntries } from '@/features/journal/use-month-entries';
-import { QuickCaptureSheet } from '@/features/today/components/quick-capture-sheet';
-import { formatTimeLabel } from '@/features/today/today-log';
-import { useAppendLog } from '@/features/today/use-append-log';
 import { useTheme } from '@/hooks/use-theme';
 import { toDateKey } from '@/lib/date';
 import { isSupabaseEnvConfigured } from '@/lib/env';
@@ -152,25 +146,7 @@ export function CalendarScreen() {
 
   const [drawerDate, setDrawerDate] = useState<string | null>(null);
 
-  // Quick-capture sheet behind the floating ＋ button — the fastest path
-  // from "opened the app" to "wrote a fragment". The mutation lives here
-  // (not in the sheet) so the sheet can close optimistically on send and
-  // a failure still surfaces as an alert.
   const insets = useSafeAreaInsets();
-  const [quickCaptureOpen, setQuickCaptureOpen] = useState(false);
-  const appendLog = useAppendLog(todayKey);
-  const submitQuickLog = useCallback(
-    (text: string) => {
-      appendLog.mutate(
-        { timeLabel: formatTimeLabel(new Date()), text },
-        {
-          onError: (err) =>
-            Alert.alert('送れませんでした', `${err.message}\n\n「${text}」`, [{ text: 'OK' }]),
-        },
-      );
-    },
-    [appendLog],
-  );
 
   // Header submenu (⋯): display-mode switcher + settings.
   const [subMenuOpen, setSubMenuOpen] = useState(false);
@@ -519,23 +495,6 @@ export function CalendarScreen() {
         </GlassView>
       </SafeAreaView>
 
-      {/* Floating quick-capture button (liquid glass) — sits bottom-right,
-          mirroring the left-aligned glass tab bar. */}
-      <Pressable
-        onPress={() => setQuickCaptureOpen(true)}
-        accessibilityRole="button"
-        accessibilityLabel="今日のログを書く"
-        style={({ pressed }) => [
-          styles.fab,
-          { bottom: insets.bottom + Spacing.two, opacity: pressed ? 0.85 : 1 },
-        ]}>
-        <GlassView
-          glassEffectStyle="regular"
-          isInteractive
-          style={[styles.fabGlass, !glassOk && { backgroundColor: theme.accent }]}>
-          <PenLine size={24} color={glassOk ? theme.accent : '#ffffff'} strokeWidth={2} />
-        </GlassView>
-      </Pressable>
 
       {/* View-mode sheet: switching a mode applies immediately, so the
           calendar behind the sheet live-previews the change. */}
@@ -780,11 +739,6 @@ export function CalendarScreen() {
         </Pressable>
       </Modal>
 
-      <QuickCaptureSheet
-        visible={quickCaptureOpen}
-        onClose={() => setQuickCaptureOpen(false)}
-        onSubmit={submitQuickLog}
-      />
       <DayDrawer date={drawerDate} onClose={closeDrawer} feelingColors={feelingColorMap} />
     </ThemedView>
   );
@@ -957,17 +911,5 @@ const styles = StyleSheet.create({
   menuDivider: {
     height: StyleSheet.hairlineWidth,
     marginHorizontal: Spacing.two,
-  },
-  fab: {
-    position: 'absolute',
-    right: Spacing.four,
-  },
-  fabGlass: {
-    // Same diameter as the bottom bar so the two read as one row of glass.
-    width: BOTTOM_BAR_HEIGHT,
-    height: BOTTOM_BAR_HEIGHT,
-    borderRadius: BOTTOM_BAR_HEIGHT / 2,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
 });

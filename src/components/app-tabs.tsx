@@ -4,22 +4,14 @@ import { useColorScheme } from 'react-native';
 import { Colors } from '@/constants/theme';
 
 /**
- * Diameter shared by the diary tab's floating pen button so it lines up
- * with the system tab bar's height.
- */
-export const BOTTOM_BAR_HEIGHT = 56;
-
-/**
- * Bottom tab bar: 日記 / ふりかえり — the system tab bar.
+ * Bottom tab bar: 日記 / ふりかえり + the detached きろく circle — all the
+ * system tab bar (genuine Liquid Glass).
  *
- * Deliberately NOT a custom bar: the genuine Liquid Glass tab bar (specular
- * edges, selection lens, scroll-driven minimize) only exists inside
- * UITabBarController; JS recreations read as flat frosted pills. UIKit owns
- * the bar's placement, so it stays centered — left-aligned bottom bars in
- * other apps are custom (and non-conformant) by definition.
- *
- * Quick capture is the diary tab's floating pen button, and 設定 lives in
- * the diary header's submenu.
+ * The trailing circle is the iOS 26 `role="search"` treatment: the system
+ * splits that tab out of the main pill into its own glass circle (the
+ * Slack-style layout), which is the only standard-conformant way to get a
+ * leading pill + trailing action. きろく opens the quick-capture surface
+ * with the input focused. 設定 lives in the diary header's submenu.
  */
 export default function AppTabs() {
   const scheme = useColorScheme();
@@ -39,6 +31,11 @@ export default function AppTabs() {
       <NativeTabs.Trigger name="reflect">
         <NativeTabs.Trigger.Icon sf="bubble.left.and.bubble.right.fill" />
         <NativeTabs.Trigger.Label>ふりかえり</NativeTabs.Trigger.Label>
+      </NativeTabs.Trigger>
+
+      <NativeTabs.Trigger name="capture" role="search">
+        <NativeTabs.Trigger.Icon sf="square.and.pencil" />
+        <NativeTabs.Trigger.Label>きろく</NativeTabs.Trigger.Label>
       </NativeTabs.Trigger>
     </NativeTabs>
   );
