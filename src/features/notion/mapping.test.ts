@@ -1,6 +1,12 @@
 import { describe, expect, it } from '@jest/globals';
 
-import { emptySnapshot, notionPageToSnapshot, snapshotToNotionUpdate } from './mapping';
+import {
+  emptySnapshot,
+  feelingOnlyNotionUpdate,
+  habitsOnlyNotionUpdate,
+  notionPageToSnapshot,
+  snapshotToNotionUpdate,
+} from './mapping';
 import type { NotionPage } from './types';
 
 describe('notionPageToSnapshot', () => {
@@ -187,5 +193,30 @@ describe('snapshotToNotionUpdate', () => {
   it('emits empty rich_text for a blank diary rather than dropping it', () => {
     const update = snapshotToNotionUpdate(emptySnapshot('2026-05-24'));
     expect(update.properties.Diary).toEqual({ rich_text: [] });
+  });
+});
+
+describe('feelingOnlyNotionUpdate / habitsOnlyNotionUpdate', () => {
+  it('builds a payload containing only the feeling', () => {
+    const { properties } = feelingOnlyNotionUpdate('(^^)');
+    expect(properties).toEqual({ Feeling: { select: { name: '(^^)' } } });
+  });
+
+  it('clears the feeling with select: null', () => {
+    const { properties } = feelingOnlyNotionUpdate(null);
+    expect(properties).toEqual({ Feeling: { select: null } });
+  });
+
+  it('builds a payload containing only the five habit checkboxes', () => {
+    const { properties } = habitsOnlyNotionUpdate({
+      output: true,
+      book: false,
+      design: true,
+      english: false,
+      exercise: false,
+    });
+    expect(Object.keys(properties)).toHaveLength(5);
+    expect(properties.Output).toEqual({ checkbox: true });
+    expect(properties.Book).toEqual({ checkbox: false });
   });
 });

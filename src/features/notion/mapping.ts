@@ -113,12 +113,36 @@ function richTextPayload(text: string): { rich_text: { text: { content: string }
 }
 
 /**
- * Property payload that updates only DIARY — used by the Today tab's
- * one-tap summarize, which must not clobber feeling/habits that may have
+ * Property payload that updates only DIARY — used by the one-tap
+ * summarize, which must not clobber feeling/habits that may have
  * changed elsewhere since the snapshot was loaded.
  */
 export function diaryOnlyNotionUpdate(diary: string): NotionUpdatePayload {
   return { properties: { [PROPERTY_NAMES.diary]: richTextPayload(diary) } };
+}
+
+/** Property payload that updates only the feeling (きろく quick state). */
+export function feelingOnlyNotionUpdate(feeling: Feeling | null): NotionUpdatePayload {
+  return {
+    properties: {
+      [PROPERTY_NAMES.feeling]: feeling ? { select: { name: feeling } } : { select: null },
+    },
+  };
+}
+
+/** Property payload that updates only the habit checkboxes (きろく quick state). */
+export function habitsOnlyNotionUpdate(
+  habits: TodayEntrySnapshot['habits'],
+): NotionUpdatePayload {
+  return {
+    properties: {
+      [PROPERTY_NAMES.output]: { checkbox: habits.output },
+      [PROPERTY_NAMES.book]: { checkbox: habits.book },
+      [PROPERTY_NAMES.design]: { checkbox: habits.design },
+      [PROPERTY_NAMES.english]: { checkbox: habits.english },
+      [PROPERTY_NAMES.exercise]: { checkbox: habits.exercise },
+    },
+  };
 }
 
 /**

@@ -1,14 +1,13 @@
 import { useFocusEffect } from 'expo-router';
-import { ArrowUp } from 'lucide-react-native';
+import * as ImagePicker from 'expo-image-picker';
+import { ArrowUp, Camera, Check } from 'lucide-react-native';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  FlatList,
   Keyboard,
   KeyboardAvoidingView,
   Platform,
   Pressable,
-  RefreshControl,
   StyleSheet,
   TextInput,
   View,
@@ -18,21 +17,42 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { BottomTabInset, Radius, Spacing } from '@/constants/theme';
+import {
+  CoverCropModal,
+  type CropSource,
+} from '@/features/journal/components/cover-crop-modal';
+import { FeelingPicker } from '@/features/journal/components/feeling-picker';
+import { HabitChecks } from '@/features/journal/components/habit-checks';
+import type { CropRect } from '@/features/journal/cover-crop';
+import { FEELINGS, type Feeling, type HabitKey } from '@/features/journal/draft';
+import { useMonthEntries } from '@/features/journal/use-month-entries';
 import { useTodayEntry } from '@/features/journal/use-today-entry';
+import { useUploadCover } from '@/features/journal/use-upload-cover';
 import { useAppendLog } from '@/features/today/use-append-log';
-import { formatTimeLabel, parseTodayLogs, type TodayLog } from '@/features/today/today-log';
+import { useQuickState, toggledHabits } from '@/features/today/use-quick-state';
+import { formatTimeLabel } from '@/features/today/today-log';
 import { useTheme } from '@/hooks/use-theme';
 import { toDateKey } from '@/lib/date';
 import { isSupabaseEnvConfigured } from '@/lib/env';
+import { invokeNotionTodaySave, type NotionSelectColor } from '@/lib/supabase';
 
 const WEEKDAY_LABELS = ['日', '月', '火', '水', '木', '金', '土'];
+const EMPTY_HABITS = {
+  output: false,
+  book: false,
+  design: false,
+  english: false,
+  exercise: false,
+} as const;
 
 /**
- * The capture tab — lives in the system tab bar's separate trailing circle
- * (`role="search"`), which is how the standard Liquid Glass bar hosts a
- * detached action the way Slack's search does. Opening it focuses the
- * input immediately: a feeling becomes a timestamped log line in the daily
- * page body with no further taps.
+ * The きろく surface — the system tab bar's detached circle (role="search").
+ *
+ * Deliberately NOT a journal view: no timeline, no past entries. Just the
+ * "today inputs" that fit one tap each — a feeling, habit checks, a cover
+ * photo — around the timestamped quick-log input, which focuses the moment
+ * the tab opens. Anything deeper (DIARY, body, AI) lives in the day drawer
+ * on the calendar.
  */
 export function CaptureScreen() {
   const theme = useTheme();
@@ -45,14 +65,24 @@ export function CaptureScreen() {
 
   const entry = useTodayEntry(todayKey, { enabled: envOk });
   const appendLog = useAppendLog(todayKey);
-  const logs = useMemo(
-    () => parseTodayLogs(entry.data?.bodyMarkdown ?? ''),
-    [entry.data?.bodyMarkdown],
-  );
+  const quickState = useQuickState(todayKey);
+  const uploadCover = useUploadCover();
+
+  // Feeling colors learned from this month's entries (same as the drawer).
+  const currentEntries = useMonthEntries(todayKey.slice(0, 7), { enabled: envOk });
+  const feelingColorMap = useMemo(() => {
+    const m: Partial<Record<Feeling, NotionSelectColor | null>> = {};
+    currentEntries.data?.forEach((e) => {
+      if (!e.feeling || !FEELINGS.includes(e.feeling as Feeling)) return;
+      const key = e.feeling as Feeling;
+      if (!(key in m)) m[key] = e.feelingColor;
+    });
+    return m;
+  }, [currentEntries.data]);
 
   const [text, setText] = useState('');
-  const listRef = useRef<FlatList<TodayLog>>(null);
   const inputRef = useRef<TextInput>(null);
+  const [lastSent, setLastSent] = useState<{ time: string; text: string } | null>(null);
 
   // Capture-first: focus the input every time the tab opens (after the tab
   // switch animation, so the keyboard doesn't fight the transition).
@@ -66,11 +96,79 @@ export function CaptureScreen() {
   const send = useCallback(() => {
     const trimmed = text.trim();
     if (trimmed.length === 0) return;
-    appendLog.mutate({ timeLabel: formatTimeLabel(new Date()), text: trimmed });
+    const timeLabel = formatTimeLabel(new Date());
+    appendLog.mutate({ timeLabel, text: trimmed });
+    setLastSent({ time: timeLabel, text: trimmed });
     setText('');
-    // The optimistic update lands synchronously after this tick.
-    requestAnimationFrame(() => listRef.current?.scrollToEnd({ animated: true }));
   }, [text, appendLog]);
+
+  const setFeeling = useCallback(
+    (feeling: Feeling | null) => {
+      quickState.setFeeling.mutate({
+        feeling,
+        notionPageId: entry.data?.notionPageId ?? null,
+      });
+    },
+    [quickState.setFeeling, entry.data?.notionPageId],
+  );
+
+  const toggleHabit = useCallback(
+    (key: HabitKey) => {
+      quickState.toggleHabit.mutate({
+        habits: toggledHabits(entry.data?.habits ?? EMPTY_HABITS, key),
+        notionPageId: entry.data?.notionPageId ?? null,
+      });
+    },
+    [quickState.toggleHabit, entry.data],
+  );
+
+  // Cover photo shortcut: pick → 16:9 crop → (create page if needed) → upload.
+  const [cropSource, setCropSource] = useState<CropSource | null>(null);
+  const [coverBusy, setCoverBusy] = useState(false);
+  const pickCover = useCallback(async () => {
+    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!perm.granted) return;
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: 'images',
+      quality: 0.7,
+      allowsEditing: false,
+    });
+    if (result.canceled || !result.assets[0]) return;
+    const asset = result.assets[0];
+    setCropSource({ uri: asset.uri, width: asset.width, height: asset.height });
+  }, []);
+  const handleCropConfirm = useCallback(
+    async (rect: CropRect) => {
+      if (!cropSource) return;
+      setCoverBusy(true);
+      try {
+        const { manipulateAsync, SaveFormat } = await import('expo-image-manipulator');
+        const cropped = await manipulateAsync(cropSource.uri, [{ crop: rect }], {
+          compress: 0.8,
+          format: SaveFormat.JPEG,
+          base64: true,
+        });
+        if (!cropped.base64) throw new Error('crop produced no data');
+        let pageId = entry.data?.notionPageId ?? null;
+        if (!pageId) {
+          const created = await invokeNotionTodaySave({ notionPageId: null, date: todayKey });
+          pageId = created.notionPageId;
+        }
+        await uploadCover.mutateAsync({
+          notionPageId: pageId,
+          date: todayKey,
+          base64: cropped.base64,
+          mimeType: 'image/jpeg',
+          filename: 'cover.jpg',
+          uri: cropped.uri,
+        });
+      } finally {
+        setCoverBusy(false);
+        setCropSource(null);
+      }
+    },
+    [cropSource, entry.data?.notionPageId, todayKey, uploadCover],
+  );
 
   // The floating native tab bar overlays content; clear it while the
   // keyboard is down, hug the keyboard while it's up.
@@ -84,25 +182,12 @@ export function CaptureScreen() {
       hide.remove();
     };
   }, []);
-  const inputBarBottom = keyboardShown
+  const clusterBottom = keyboardShown
     ? Spacing.two
     : insets.bottom + BottomTabInset + Spacing.two;
 
-  const renderLog = useCallback(
-    ({ item }: { item: TodayLog }) => (
-      <View style={[styles.logCard, { backgroundColor: theme.backgroundElement }]}>
-        <ThemedText type="small" style={{ color: theme.accent }}>
-          {item.time}
-        </ThemedText>
-        <ThemedText selectable style={styles.logText}>
-          {item.text}
-        </ThemedText>
-      </View>
-    ),
-    [theme],
-  );
-
   const canSend = text.trim().length > 0 && envOk && !appendLog.isPending;
+  const hasCover = Boolean(entry.data?.coverUrl);
 
   return (
     <ThemedView style={styles.flex}>
@@ -111,97 +196,109 @@ export function CaptureScreen() {
           style={styles.flex}
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
           <View style={styles.header}>
-            <ThemedText type="subtitle">きろく</ThemedText>
-            <ThemedText type="small" themeColor="textSecondary">
-              {dateLabel}
-            </ThemedText>
-          </View>
-
-          <FlatList
-            ref={listRef}
-            data={logs}
-            keyExtractor={(item, i) => `${item.time}-${i}`}
-            renderItem={renderLog}
-            showsVerticalScrollIndicator={false}
-            contentContainerStyle={styles.listContent}
-            onContentSizeChange={() => listRef.current?.scrollToEnd({ animated: false })}
-            refreshControl={
-              envOk ? (
-                <RefreshControl
-                  refreshing={entry.isRefetching}
-                  onRefresh={() => {
-                    entry.refetch();
-                  }}
-                  tintColor={theme.textSecondary}
-                />
-              ) : undefined
-            }
-            ListEmptyComponent={
-              !envOk ? (
-                <ThemedText type="small" themeColor="textSecondary" style={styles.emptyText}>
-                  Notion 未接続
-                </ThemedText>
-              ) : entry.isLoading ? (
-                <ActivityIndicator
-                  size="small"
-                  color={theme.textSecondary}
-                  style={styles.emptySpinner}
-                />
-              ) : (
-                <View style={styles.emptyBox}>
-                  <ThemedText type="small" themeColor="textSecondary" style={styles.emptyText}>
-                    今日はまだ何もありません。{'\n'}
-                    ひとことから、そっと積んでいきましょう。
-                  </ThemedText>
-                </View>
-              )
-            }
-          />
-
-          {appendLog.error ? (
-            <ThemedText type="small" style={[styles.sendError, { color: theme.danger }]}>
-              送れませんでした: {appendLog.error.message}
-            </ThemedText>
-          ) : null}
-
-          <View
-            style={[
-              styles.inputBar,
-              { borderTopColor: theme.backgroundElement, paddingBottom: inputBarBottom },
-            ]}>
-            <TextInput
-              ref={inputRef}
-              value={text}
-              onChangeText={setText}
-              multiline
-              placeholder="いま、なにしてる？"
-              placeholderTextColor={theme.textSecondary}
-              style={[
-                styles.input,
-                { color: theme.text, backgroundColor: theme.backgroundElement },
-              ]}
-            />
+            <View style={styles.headerTitleGroup}>
+              <ThemedText type="subtitle">きろく</ThemedText>
+              <ThemedText type="small" themeColor="textSecondary">
+                {dateLabel}
+              </ThemedText>
+            </View>
             <Pressable
-              onPress={send}
-              disabled={!canSend}
+              onPress={pickCover}
+              disabled={!envOk || coverBusy}
               accessibilityRole="button"
-              accessibilityLabel="ログを送る"
-              style={({ pressed }) => [
-                styles.sendBtn,
-                {
-                  backgroundColor: canSend ? theme.accent : theme.backgroundSelected,
-                  opacity: pressed ? 0.7 : 1,
-                },
+              accessibilityLabel="今日のカバー写真を選ぶ"
+              style={[
+                styles.coverBtn,
+                { backgroundColor: hasCover ? theme.accentSoft : theme.backgroundElement },
               ]}>
-              {appendLog.isPending ? (
-                <ActivityIndicator size="small" color="#ffffff" />
+              {coverBusy ? (
+                <ActivityIndicator size="small" color={theme.accent} />
               ) : (
-                <ArrowUp size={18} color="#ffffff" strokeWidth={2.5} />
+                <>
+                  <Camera
+                    size={15}
+                    color={hasCover ? theme.accent : theme.textSecondary}
+                    strokeWidth={1.8}
+                  />
+                  {hasCover && <Check size={13} color={theme.accent} strokeWidth={2.5} />}
+                </>
               )}
             </Pressable>
           </View>
+
+          {/* Quiet middle: only the last capture's confirmation lives here —
+              no timeline, this is a place to write, not to read. */}
+          <View style={styles.feedbackArea}>
+            {appendLog.error ? (
+              <ThemedText type="small" style={{ color: theme.danger }} selectable>
+                送れませんでした: {appendLog.error.message}
+              </ThemedText>
+            ) : lastSent ? (
+              <View style={styles.sentRow}>
+                <Check size={14} color={theme.accent} strokeWidth={2.5} />
+                <ThemedText type="small" themeColor="textSecondary">
+                  {lastSent.time} きろくしました
+                </ThemedText>
+              </View>
+            ) : (
+              <ThemedText type="small" themeColor="textSecondary" style={styles.emptyHint}>
+                いまの気持ちを、そのまま。
+              </ThemedText>
+            )}
+          </View>
+
+          <View style={[styles.cluster, { paddingBottom: clusterBottom }]}>
+            <FeelingPicker
+              value={(entry.data?.feeling as Feeling | null) ?? null}
+              onChange={setFeeling}
+              colorMap={feelingColorMap}
+            />
+            <HabitChecks
+              value={entry.data?.habits ?? EMPTY_HABITS}
+              onToggle={toggleHabit}
+            />
+            <View style={styles.inputRow}>
+              <TextInput
+                ref={inputRef}
+                value={text}
+                onChangeText={setText}
+                multiline
+                placeholder="いま、なにしてる？"
+                placeholderTextColor={theme.textSecondary}
+                style={[
+                  styles.input,
+                  { color: theme.text, backgroundColor: theme.backgroundElement },
+                ]}
+              />
+              <Pressable
+                onPress={send}
+                disabled={!canSend}
+                accessibilityRole="button"
+                accessibilityLabel="ログを送る"
+                style={({ pressed }) => [
+                  styles.sendBtn,
+                  {
+                    backgroundColor: canSend ? theme.accent : theme.backgroundSelected,
+                    opacity: pressed ? 0.7 : 1,
+                  },
+                ]}>
+                {appendLog.isPending ? (
+                  <ActivityIndicator size="small" color="#ffffff" />
+                ) : (
+                  <ArrowUp size={18} color="#ffffff" strokeWidth={2.5} />
+                )}
+              </Pressable>
+            </View>
+          </View>
         </KeyboardAvoidingView>
       </SafeAreaView>
+
+      <CoverCropModal
+        source={cropSource}
+        busy={coverBusy}
+        onCancel={() => setCropSource(null)}
+        onConfirm={handleCropConfirm}
+      />
     </ThemedView>
   );
 }
@@ -212,65 +309,64 @@ const styles = StyleSheet.create({
   },
   header: {
     flexDirection: 'row',
-    alignItems: 'baseline',
-    gap: Spacing.two,
+    alignItems: 'center',
+    justifyContent: 'space-between',
     paddingHorizontal: Spacing.four,
     paddingTop: Spacing.two,
     paddingBottom: Spacing.two,
   },
-  listContent: {
-    flexGrow: 1,
-    paddingHorizontal: Spacing.four,
-    paddingBottom: Spacing.three,
+  headerTitleGroup: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
     gap: Spacing.two,
   },
-  logCard: {
-    borderRadius: Radius.lg,
+  coverBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    height: 32,
     paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.two + 2,
-    gap: 2,
+    borderRadius: 16,
   },
-  logText: {
-    lineHeight: 22,
-  },
-  emptyBox: {
+  feedbackArea: {
     flex: 1,
-    justifyContent: 'center',
-  },
-  emptyText: {
-    textAlign: 'center',
-    lineHeight: 22,
-  },
-  emptySpinner: {
-    marginTop: Spacing.five,
-  },
-  sendError: {
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    paddingBottom: Spacing.three,
     paddingHorizontal: Spacing.four,
-    paddingBottom: Spacing.one,
   },
-  inputBar: {
+  sentRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.one,
+  },
+  emptyHint: {
+    textAlign: 'center',
+  },
+  cluster: {
+    paddingHorizontal: Spacing.three,
+    gap: Spacing.two,
+  },
+  inputRow: {
     flexDirection: 'row',
     alignItems: 'flex-end',
     gap: Spacing.two,
-    paddingHorizontal: Spacing.three,
-    paddingTop: Spacing.two,
-    borderTopWidth: StyleSheet.hairlineWidth,
   },
   input: {
     flex: 1,
-    minHeight: 40,
+    minHeight: 44,
     maxHeight: 120,
     borderRadius: Radius.lg,
     paddingHorizontal: Spacing.three,
-    paddingTop: Spacing.two + 2,
-    paddingBottom: Spacing.two + 2,
+    paddingTop: Spacing.two + 3,
+    paddingBottom: Spacing.two + 3,
     fontSize: 16,
     lineHeight: 21,
   },
   sendBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
   },
