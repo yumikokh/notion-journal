@@ -16,7 +16,8 @@ export default function AppTabs() {
       minimizeBehavior="onScrollDown"
       backgroundColor={colors.background}
       indicatorColor={colors.backgroundElement}
-      labelStyle={{ selected: { color: colors.text } }}>
+      // Selected icon+label follow the palette accent (default is iOS blue).
+      tintColor={colors.accent}>
       <NativeTabs.Trigger name="index">
         <NativeTabs.Trigger.Icon sf="book.closed.fill" />
         <NativeTabs.Trigger.Label>日記</NativeTabs.Trigger.Label>
