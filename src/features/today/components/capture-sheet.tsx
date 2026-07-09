@@ -79,22 +79,42 @@ export function CaptureSheet({ visible, onClose, feelingColors }: CaptureSheetPr
   const [backdropAnim] = useState(() => new Animated.Value(0));
   const [composerFade] = useState(() => new Animated.Value(1));
   const [drawerFade] = useState(() => new Animated.Value(0));
+  // Presentation is hand-animated (slide + backdrop fade in parallel):
+  // Modal's own animation fires onShow only after the slide finishes,
+  // which made the backdrop appear late.
+  const [slideAnim] = useState(() => new Animated.Value(1)); // 1 = offscreen
 
-  // Reset to composer state every time the sheet opens (onShow is an event
-  // handler, so the state writes are legal there).
-  const handleShow = useCallback(() => {
-    setExpanded(false);
-    heightAnim.setValue(compactH);
-    composerFade.setValue(1);
-    drawerFade.setValue(0);
-    Animated.timing(backdropAnim, { toValue: 1, duration: 180, useNativeDriver: true }).start();
-  }, [compactH, heightAnim, composerFade, drawerFade, backdropAnim]);
+  useEffect(() => {
+    if (!visible) return;
+    Animated.parallel([
+      Animated.timing(backdropAnim, { toValue: 1, duration: 200, useNativeDriver: false }),
+      Animated.spring(slideAnim, {
+        toValue: 0,
+        useNativeDriver: false,
+        friction: 11,
+        tension: 70,
+      }),
+    ]).start();
+  }, [visible, backdropAnim, slideAnim]);
 
   const close = useCallback(() => {
     Keyboard.dismiss();
-    Animated.timing(backdropAnim, { toValue: 0, duration: 150, useNativeDriver: true }).start();
-    onClose();
-  }, [onClose, backdropAnim]);
+    Animated.parallel([
+      Animated.timing(backdropAnim, { toValue: 0, duration: 160, useNativeDriver: false }),
+      Animated.timing(slideAnim, { toValue: 1, duration: 180, useNativeDriver: false }),
+      // Shrink while sliding so a fully-expanded sheet also clears the screen.
+      Animated.timing(heightAnim, { toValue: compactH, duration: 180, useNativeDriver: false }),
+    ]).start(() => {
+      onClose();
+      // Reset to the composer for the next open — leaving this until here
+      // (not on open) is what prevents a one-frame flash of the previous
+      // expanded state.
+      setExpanded(false);
+      heightAnim.setValue(compactH);
+      composerFade.setValue(1);
+      drawerFade.setValue(0);
+    });
+  }, [onClose, backdropAnim, slideAnim, heightAnim, composerFade, drawerFade, compactH]);
 
   const expand = useCallback(() => {
     Keyboard.dismiss();
@@ -158,12 +178,7 @@ export function CaptureSheet({ visible, onClose, feelingColors }: CaptureSheetPr
   }, []);
 
   return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType="slide"
-      onShow={handleShow}
-      onRequestClose={close}>
+    <Modal visible={visible} transparent animationType="none" onRequestClose={close}>
       <View style={styles.flexEnd}>
         <Animated.View style={[styles.backdrop, { opacity: backdropAnim }]}>
           <Pressable style={styles.flex} accessibilityLabel="きろくを閉じる" onPress={close} />
@@ -172,7 +187,21 @@ export function CaptureSheet({ visible, onClose, feelingColors }: CaptureSheetPr
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
           pointerEvents="box-none">
           <Animated.View
-            style={[styles.sheet, { height: heightAnim, backgroundColor: theme.background }]}>
+            style={[
+              styles.sheet,
+              {
+                height: heightAnim,
+                backgroundColor: theme.background,
+                transform: [
+                  {
+                    translateY: slideAnim.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [0, compactH + 80],
+                    }),
+                  },
+                ],
+              },
+            ]}>
             <View style={styles.grabberZone} {...(pan?.panHandlers ?? {})}>
               {/* Tap is the discoverable fallback for the drag gesture. */}
               <Pressable

@@ -68,9 +68,10 @@ const CELL_HEIGHT_RATIO = 1.4;
  */
 const HEADER_BAR_HEIGHT = 36;
 const WEEKDAY_STRIP_HEIGHT = 22;
-const CHROME_PANEL_HEIGHT =
-  Spacing.two * 2 + HEADER_BAR_HEIGHT + Spacing.one + WEEKDAY_STRIP_HEIGHT;
-const FLOATING_CHROME_HEIGHT = Spacing.two + CHROME_PANEL_HEIGHT + Spacing.two;
+/** Chrome content below the top safe-area inset (the panel bleeds to y=0). */
+const CHROME_CONTENT_HEIGHT =
+  Spacing.one + HEADER_BAR_HEIGHT + Spacing.one + WEEKDAY_STRIP_HEIGHT + Spacing.two;
+const FLOATING_CHROME_HEIGHT = CHROME_CONTENT_HEIGHT + Spacing.two;
 /** How far the continuous calendar reaches (months before/after today). */
 const MONTHS_BACK = 24;
 const MONTHS_FORWARD = 1;
@@ -385,15 +386,14 @@ export function CalendarScreen() {
           )}
         </View>
 
-        {/* Floating chrome: ONE flat panel (app background color) holding
-            the month title, the glass action buttons and the weekday row.
-            The buttons carry the glass; the panel itself stays quiet.
-            (Absolute children ignore the SafeAreaView padding, so the top
-            inset is added manually.) */}
+        {/* Floating chrome: ONE flat band (app background color) bleeding
+            edge-to-edge from the very top of the screen, holding the month
+            title, the glass action buttons and the weekday row. The buttons
+            carry the glass; the band itself stays quiet. */}
         <View
           style={[
             styles.chromePanel,
-            { top: insets.top + Spacing.two, backgroundColor: theme.background },
+            { paddingTop: insets.top + Spacing.one, backgroundColor: theme.background },
           ]}>
           <View style={styles.chromeHeaderRow}>
             <ThemedText type="subtitle">
@@ -725,13 +725,11 @@ const styles = StyleSheet.create({
   },
   chromePanel: {
     position: 'absolute',
-    left: Spacing.two,
-    right: Spacing.two,
-    height: CHROME_PANEL_HEIGHT,
-    borderRadius: 20,
-    overflow: 'hidden',
+    top: 0,
+    left: 0,
+    right: 0,
     paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.two,
+    paddingBottom: Spacing.two,
     gap: Spacing.one,
   },
   chromeHeaderRow: {
@@ -741,9 +739,9 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   chromeWeekdayRow: {
-    // Bleed back out to the panel edge so the labels line up with the
-    // calendar columns below (panel padding would shift them inward).
-    marginHorizontal: -Spacing.three,
+    // Bleed back out so the labels line up with the calendar columns below
+    // (grid sits at Spacing.two from the screen edge; panel pads three).
+    marginHorizontal: -(Spacing.three - Spacing.two),
     height: WEEKDAY_STRIP_HEIGHT,
     flexDirection: 'row',
     alignItems: 'center',
