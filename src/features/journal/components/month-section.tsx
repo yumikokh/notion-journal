@@ -286,10 +286,8 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.14)',
   },
   dateRow: {
-    // Top-left corner (Notion/Google-calendar style); the rest of the
-    // cell's content stays centered.
-    alignSelf: 'flex-start',
-    marginLeft: 2,
+    // Top-center, matching the rest of the cell's content.
+    alignSelf: 'center',
     marginTop: -2,
     flexDirection: 'row',
     alignItems: 'center',
