@@ -51,8 +51,10 @@ import type { TodayEntrySnapshot } from '@/features/notion/types';
 import type { MonthEntry, NotionSelectColor } from '@/lib/supabase';
 import { loadCustomPrompt } from '@/features/settings/prompt-storage';
 import { useTheme } from '@/hooks/use-theme';
-import { formatJournalTitle } from '@/lib/date';
+import { toDateKey } from '@/lib/date';
 import { isSupabaseEnvConfigured } from '@/lib/env';
+
+const DRAWER_WEEKDAYS = ['日', '月', '火', '水', '木', '金', '土'];
 
 type PendingPhoto = {
   uri: string;
@@ -116,6 +118,13 @@ export function DayDrawerContent({
   const queryClient = useQueryClient();
 
   const dateObj = useMemo(() => new Date(`${date}T00:00:00`), [date]);
+  // 「今日」 for today (the common case — the composer morphs into this),
+  // an explicit short date for any other day; the full date is the subtitle.
+  const titleLabel =
+    date === toDateKey(new Date())
+      ? '今日'
+      : `${dateObj.getMonth() + 1}月${dateObj.getDate()}日`;
+  const subtitleLabel = `${dateObj.getFullYear()}/${dateObj.getMonth() + 1}/${dateObj.getDate()} (${DRAWER_WEEKDAYS[dateObj.getDay()]})`;
 
   const entry = useTodayEntry(date, { enabled: envOk });
   const saveAll = useSaveAll();
@@ -369,7 +378,10 @@ export function DayDrawerContent({
                 <ThemedText style={styles.titleIcon}>{pageIcon.emoji}</ThemedText>
               )}
               <ThemedText type="subtitle" numberOfLines={1}>
-                {formatJournalTitle(dateObj)}
+                {titleLabel}
+              </ThemedText>
+              <ThemedText type="small" themeColor="textSecondary">
+                {subtitleLabel}
               </ThemedText>
             </View>
             <View style={styles.topBarActions}>
@@ -737,16 +749,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: Spacing.four,
-    paddingTop: Spacing.three,
-    paddingBottom: Spacing.two,
+    paddingTop: Spacing.two,
+    paddingBottom: Spacing.one,
     borderBottomWidth: StyleSheet.hairlineWidth,
     gap: Spacing.two,
   },
   topBarTitle: {
     flex: 1,
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.one,
+    alignItems: 'baseline',
+    gap: Spacing.two,
   },
   titleIcon: { fontSize: 18, lineHeight: 22 },
   topBarActions: {
@@ -777,8 +789,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   scrollContent: {
+    paddingTop: Spacing.two,
     paddingBottom: Spacing.five,
-    gap: Spacing.four,
+    gap: Spacing.three,
   },
   // Cover — a rounded card, aligned with the body's horizontal rhythm.
   coverPressable: {
