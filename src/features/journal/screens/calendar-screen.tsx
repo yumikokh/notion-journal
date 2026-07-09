@@ -72,18 +72,7 @@ const WEEKDAY_STRIP_HEIGHT = 22;
 /** Chrome content below the top safe-area inset (the panel bleeds to y=0). */
 const CHROME_CONTENT_HEIGHT =
   Spacing.one + HEADER_BAR_HEIGHT + Spacing.one + WEEKDAY_STRIP_HEIGHT + Spacing.two;
-/**
- * Skirt below the band where the frosting dissolves: each strip blurs a
- * little less and carries a little less of the background wash.
- */
-const SKIRT_STEPS = [
-  { intensity: 26, wash: '8C' },
-  { intensity: 17, wash: '59' },
-  { intensity: 9, wash: '30' },
-  { intensity: 4, wash: '12' },
-] as const;
-const CHROME_SKIRT_HEIGHT = 28;
-const FLOATING_CHROME_HEIGHT = CHROME_CONTENT_HEIGHT + Spacing.four;
+const FLOATING_CHROME_HEIGHT = CHROME_CONTENT_HEIGHT + Spacing.two;
 /** How far the continuous calendar reaches (months before/after today). */
 const MONTHS_BACK = 24;
 const MONTHS_FORWARD = 1;
@@ -414,26 +403,6 @@ export function CalendarScreen() {
               { backgroundColor: `${theme.background}B3` },
             ]}
           />
-          {/* Progressive-blur approximation: stacked strips whose blur
-              intensity and color wash both taper off, so the frosting
-              itself dissolves instead of a bright gradient shining. */}
-          <View style={styles.chromeSkirt} pointerEvents="none">
-            {SKIRT_STEPS.map((step, i) => (
-              <View key={i} style={styles.chromeSkirtStep}>
-                <BlurView
-                  intensity={step.intensity}
-                  tint={scheme}
-                  style={StyleSheet.absoluteFill}
-                />
-                <View
-                  style={[
-                    StyleSheet.absoluteFill,
-                    { backgroundColor: `${theme.background}${step.wash}` },
-                  ]}
-                />
-              </View>
-            ))}
-          </View>
           <View style={styles.chromeHeaderRow}>
             <ThemedText type="subtitle">
               {visibleMonth.year}年{visibleMonth.month + 1}月
@@ -770,17 +739,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.three,
     paddingBottom: Spacing.two,
     gap: Spacing.one,
-  },
-  chromeSkirt: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: -CHROME_SKIRT_HEIGHT,
-    height: CHROME_SKIRT_HEIGHT,
-  },
-  chromeSkirtStep: {
-    flex: 1,
-    overflow: 'hidden',
   },
   chromeHeaderRow: {
     height: HEADER_BAR_HEIGHT,
