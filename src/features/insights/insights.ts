@@ -5,7 +5,6 @@
  * (a subset of `MonthEntry`) into small visualizable slices:
  *   - Daily feeling trend (one point per day — the Reflect week view)
  *   - Habit rates         (achievement % per habit over a window)
- *   - Journal streak      (consecutive recorded days — the calendar chip)
  *
  * Kept separate from any rendering so the maths can be unit-tested without
  * a renderer — see `insights.test.ts`.
@@ -62,24 +61,10 @@ export type HabitRate = {
   rate: number;
 };
 
-export type StreakInfo = {
-  /** Consecutive recorded days ending today (or yesterday if today is unlogged). */
-  current: number;
-  /** Longest consecutive run anywhere in the supplied dates. */
-  longest: number;
-  /** Whether today already has a journal entry. */
-  recordedToday: boolean;
-};
-
 /** Parse a `YYYY-MM-DD` key as a local-midnight Date. */
 function parseDateKey(key: string): Date {
   const [y, m, d] = key.split('-').map(Number);
   return new Date(y, m - 1, d);
-}
-
-/** Local midnight of `date`, without mutating it. */
-function startOfDay(date: Date): Date {
-  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
 }
 
 const WEEKDAY_LABELS = ['月', '火', '水', '木', '金', '土', '日'];
@@ -143,42 +128,4 @@ export function buildHabitRates(records: DayRecord[], total: number): HabitRate[
     const rate = total > 0 ? Math.min(1, checked / total) : 0;
     return { key, label, checked, total, rate };
   });
-}
-
-/**
- * Journal streak from the set of recorded dates.
- * `current` counts back from today; if today is not yet logged it counts from
- * yesterday so a streak isn't shown as broken until the day actually passes.
- */
-export function computeStreak(dates: Iterable<string>, today: Date): StreakInfo {
-  const set = new Set(dates);
-  const recordedToday = set.has(toDateKey(startOfDay(today)));
-
-  // Current run.
-  let current = 0;
-  let cursor = startOfDay(today);
-  if (!set.has(toDateKey(cursor))) {
-    cursor = addDays(cursor, -1);
-  }
-  while (set.has(toDateKey(cursor))) {
-    current += 1;
-    cursor = addDays(cursor, -1);
-  }
-
-  // Longest run anywhere — sort keys (YYYY-MM-DD sorts chronologically).
-  const sorted = [...set].sort();
-  let longest = 0;
-  let run = 0;
-  let prev: string | null = null;
-  for (const key of sorted) {
-    if (prev && toDateKey(addDays(parseDateKey(prev), 1)) === key) {
-      run += 1;
-    } else {
-      run = 1;
-    }
-    if (run > longest) longest = run;
-    prev = key;
-  }
-
-  return { current, longest, recordedToday };
 }

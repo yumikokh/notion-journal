@@ -3,14 +3,9 @@ import { describe, expect, it } from '@jest/globals';
 import {
   buildDailyTrend,
   buildHabitRates,
-  computeStreak,
   feelingToScore,
   type DayRecord,
 } from './insights';
-
-// Fixed reference date so every test is deterministic.
-// 2026-06-05 is a Friday; its Monday is 2026-06-01.
-const TODAY = new Date(2026, 5, 5);
 
 const noHabits = {
   output: false,
@@ -112,41 +107,5 @@ describe('buildHabitRates', () => {
     const rates = buildHabitRates(records, 0); // 0 denominator → no division by zero
     expect(rates).toHaveLength(5);
     expect(rates.every((r) => r.rate >= 0 && r.rate <= 1)).toBe(true);
-  });
-});
-
-describe('computeStreak', () => {
-  it('counts consecutive days ending today', () => {
-    const dates = ['2026-06-03', '2026-06-04', '2026-06-05'];
-    const streak = computeStreak(dates, TODAY);
-    expect(streak.current).toBe(3);
-    expect(streak.recordedToday).toBe(true);
-    expect(streak.longest).toBe(3);
-  });
-
-  it('keeps the streak alive from yesterday when today is unlogged', () => {
-    const dates = ['2026-06-02', '2026-06-03', '2026-06-04']; // up to yesterday
-    const streak = computeStreak(dates, TODAY);
-    expect(streak.current).toBe(3);
-    expect(streak.recordedToday).toBe(false);
-  });
-
-  it('breaks when neither today nor yesterday is recorded', () => {
-    const dates = ['2026-06-01', '2026-06-02'];
-    const streak = computeStreak(dates, TODAY);
-    expect(streak.current).toBe(0);
-    expect(streak.longest).toBe(2);
-  });
-
-  it('finds the longest run across gaps', () => {
-    const dates = ['2026-05-01', '2026-05-02', '2026-05-03', '2026-05-20', '2026-06-05'];
-    const streak = computeStreak(dates, TODAY);
-    expect(streak.longest).toBe(3);
-    expect(streak.current).toBe(1);
-  });
-
-  it('handles an empty set', () => {
-    const streak = computeStreak([], TODAY);
-    expect(streak).toEqual({ current: 0, longest: 0, recordedToday: false });
   });
 });

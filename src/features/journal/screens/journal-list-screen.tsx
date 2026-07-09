@@ -1,3 +1,4 @@
+import { GlassView, isLiquidGlassAvailable } from 'expo-glass-effect';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { ChevronDown, ChevronLeft, Plus } from 'lucide-react-native';
@@ -40,6 +41,8 @@ import { isSupabaseEnvConfigured } from '@/lib/env';
 import type { MonthEntry, NotionSelectColor } from '@/lib/supabase';
 
 const WEEKDAY_LABELS = ['日', '月', '火', '水', '木', '金', '土'];
+/** Liquid glass needs iOS 26+; older systems get solid-color fallbacks. */
+const glassOk = isLiquidGlassAvailable();
 /** How far back the pager/month picker reaches (matches the calendar). */
 const MAX_MONTHS_BACK = 24;
 
@@ -194,16 +197,21 @@ function JournalListPager({ months }: { months: string[] }) {
     <ThemedView style={styles.root}>
       <SafeAreaView style={styles.safeArea} edges={['top']}>
         <View style={styles.header}>
-        <Pressable
-          // Deep links can land here with an empty stack — fall back to the
-          // calendar tab instead of an unhandled GO_BACK.
-          onPress={() => (router.canGoBack() ? router.back() : router.replace('/'))}
-          accessibilityRole="button"
-          accessibilityLabel="戻る"
-          hitSlop={8}
-          style={styles.headerSide}>
-          <ChevronLeft size={24} color={theme.text} strokeWidth={2} />
-        </Pressable>
+        <GlassView
+          glassEffectStyle="regular"
+          isInteractive
+          style={[styles.backGlass, !glassOk && { backgroundColor: theme.backgroundElement }]}>
+          <Pressable
+            // Deep links can land here with an empty stack — fall back to the
+            // calendar tab instead of an unhandled GO_BACK.
+            onPress={() => (router.canGoBack() ? router.back() : router.replace('/'))}
+            accessibilityRole="button"
+            accessibilityLabel="戻る"
+            hitSlop={8}
+            style={styles.backGlassInner}>
+            <ChevronLeft size={20} color={theme.text} strokeWidth={2} />
+          </Pressable>
+        </GlassView>
         {/* Single-month flips are covered by swiping the pager itself, so
             the header keeps just the picker entry — no ‹ › clutter. */}
         <View style={styles.monthNav}>
@@ -479,6 +487,16 @@ const styles = StyleSheet.create({
   headerSide: {
     width: 32,
     alignItems: 'flex-start',
+    justifyContent: 'center',
+  },
+  backGlass: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+  },
+  backGlassInner: {
+    flex: 1,
+    alignItems: 'center',
     justifyContent: 'center',
   },
   monthNav: {

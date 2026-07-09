@@ -17,6 +17,9 @@ export default ({ config }) => {
     config.ios?.bundleIdentifier ?? "com.yumikokh.notion-journal";
   const bundleId = `${baseBundleId}${suffix}`;
 
+  // Android の Application ID はハイフンを許容しない（iOS の bundleIdentifier は許容する）。
+  const androidPackage = bundleId.replace(/-/g, "_");
+
   return {
     ...config,
     name: `${config.name}${label}`,
@@ -26,7 +29,7 @@ export default ({ config }) => {
     },
     android: {
       ...config.android,
-      package: bundleId,
+      package: androidPackage,
     },
   };
 };
