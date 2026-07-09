@@ -18,6 +18,9 @@ export function useMonthEntries(yearMonth: string, options: UseMonthEntriesOptio
       const { entries } = await invokeNotionMonthGet({ yearMonth });
       return entries;
     },
+    // Months mount/unmount constantly while the continuous calendar scrolls;
+    // without a staleTime every remount would refire the Notion query.
+    staleTime: 5 * 60 * 1000,
     enabled: options.enabled ?? true,
   });
 }

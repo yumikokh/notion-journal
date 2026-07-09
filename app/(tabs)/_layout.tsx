@@ -1,6 +1,6 @@
 import AppTabs from '@/components/app-tabs';
 
-/** Layout for the bottom-tab group: 日記 / ふりかえり / 設定. */
+/** Layout for the bottom-tab group: カレンダー / ふりかえり. */
 export default function TabsLayout() {
   return <AppTabs />;
 }

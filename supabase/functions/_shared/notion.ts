@@ -49,13 +49,14 @@ export class NotionClient {
   queryDataSource<T = unknown>(
     dataSourceId: string,
     filter: unknown,
-    options: { pageSize?: number; startCursor?: string } = {},
+    options: { pageSize?: number; startCursor?: string; sorts?: unknown[] } = {},
   ): Promise<T> {
     const body: Record<string, unknown> = {
       filter,
       page_size: options.pageSize ?? 1,
     };
     if (options.startCursor) body.start_cursor = options.startCursor;
+    if (options.sorts) body.sorts = options.sorts;
     return this.request(
       'query data source',
       `${NOTION_BASE}/data_sources/${dataSourceId}/query`,

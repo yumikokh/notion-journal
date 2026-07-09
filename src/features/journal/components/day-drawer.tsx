@@ -1,10 +1,12 @@
+import { useQueryClient } from '@tanstack/react-query';
+import { Image as CoverImage } from 'expo-image';
+import { SaveFormat, manipulateAsync } from 'expo-image-manipulator';
 import * as ImagePicker from 'expo-image-picker';
-import { Sparkles, Trash2 } from 'lucide-react-native';
+import { Camera, Check, PenLine, Sparkles, Trash2, X } from 'lucide-react-native';
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
-  Image,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -19,7 +21,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { MarkdownView } from '@/components/markdown-view';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { Spacing } from '@/constants/theme';
+import { Radius, Spacing } from '@/constants/theme';
 import { buildDayCalendarContext } from '@/features/calendar/calendar-context';
 import { DayEventsSection } from '@/features/calendar/components/day-events-section';
 import { useDayEvents } from '@/features/calendar/use-day-events';
@@ -33,6 +35,12 @@ import {
   type Feeling,
   type UserDraftAction,
 } from '@/features/journal/draft';
+import {
+  CoverCropModal,
+  type CropSource,
+} from '@/features/journal/components/cover-crop-modal';
+import type { CropRect } from '@/features/journal/cover-crop';
+import { coverImageSource } from '@/features/journal/cover-image';
 import { useAiStructure } from '@/features/journal/use-ai-structure';
 import { useRemoveCover } from '@/features/journal/use-remove-cover';
 import { useSaveAll } from '@/features/journal/use-save-today';
@@ -40,7 +48,7 @@ import { useTodayEntry } from '@/features/journal/use-today-entry';
 import { useUploadCover } from '@/features/journal/use-upload-cover';
 import { emptySnapshot } from '@/features/notion/mapping';
 import type { TodayEntrySnapshot } from '@/features/notion/types';
-import type { NotionSelectColor } from '@/lib/supabase';
+import type { MonthEntry, NotionSelectColor } from '@/lib/supabase';
 import { loadCustomPrompt } from '@/features/settings/prompt-storage';
 import { useTheme } from '@/hooks/use-theme';
 import { formatJournalTitle } from '@/lib/date';
@@ -90,7 +98,11 @@ export function DayDrawer({ date, onClose, feelingColors }: DayDrawerProps) {
   );
 }
 
-function DayDrawerContent({
+/**
+ * The drawer's inner editor, exported so the きろく sheet can morph into
+ * it when pulled up to full height (same content, no second modal).
+ */
+export function DayDrawerContent({
   date,
   onClose,
   feelingColors,
@@ -101,11 +113,7 @@ function DayDrawerContent({
 }) {
   const theme = useTheme();
   const envOk = isSupabaseEnvConfigured();
-  // AI button uses the high-contrast "filled" treatment — black in light
-  // mode, white in dark mode — matching the primary 保存 button so both
-  // primary actions feel like first-class buttons.
-  const aiBg = theme.text;
-  const aiFg = theme.background;
+  const queryClient = useQueryClient();
 
   const dateObj = useMemo(() => new Date(`${date}T00:00:00`), [date]);
 
@@ -265,6 +273,14 @@ function DayDrawerContent({
     ]);
   };
 
+  // Photo picked from the library, awaiting its 16:9 crop. Keeps the
+  // original base64 around as a fallback for dev clients built before
+  // expo-image-manipulator was added.
+  const [cropSource, setCropSource] = useState<
+    (CropSource & { base64: string; mimeType: string; filename?: string }) | null
+  >(null);
+  const [cropping, setCropping] = useState(false);
+
   const pickPhoto = async () => {
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!perm.granted) return;
@@ -272,21 +288,72 @@ function DayDrawerContent({
       mediaTypes: 'images',
       quality: 0.7,
       base64: true,
+      // The 16:9 crop happens in our own CoverCropModal — the OS editor
+      // only offers a square crop box.
       allowsEditing: false,
     });
     if (result.canceled || !result.assets[0]) return;
     const asset = result.assets[0];
     if (!asset.base64) return;
-    setPendingPhoto({
+    setCropSource({
       uri: asset.uri,
+      width: asset.width,
+      height: asset.height,
       base64: asset.base64,
       mimeType: asset.mimeType ?? 'image/jpeg',
       filename: asset.fileName ?? undefined,
     });
   };
 
+  const handleCropConfirm = async (rect: CropRect) => {
+    if (!cropSource) return;
+    setCropping(true);
+    try {
+      const cropped = await manipulateAsync(cropSource.uri, [{ crop: rect }], {
+        compress: 0.8,
+        format: SaveFormat.JPEG,
+        base64: true,
+      });
+      if (!cropped.base64) throw new Error('crop produced no data');
+      setPendingPhoto({
+        uri: cropped.uri,
+        base64: cropped.base64,
+        mimeType: 'image/jpeg',
+        filename: cropSource.filename ?? 'cover.jpg',
+      });
+    } catch {
+      // Most likely an older dev client without the image-manipulator
+      // native module — fall back to the uncropped photo.
+      Alert.alert(
+        'トリミングできませんでした',
+        '選択した写真をそのままカバーに設定します。（開発ビルドの更新が必要かもしれません）',
+      );
+      setPendingPhoto({
+        uri: cropSource.uri,
+        base64: cropSource.base64,
+        mimeType: cropSource.mimeType,
+        filename: cropSource.filename,
+      });
+    } finally {
+      setCropping(false);
+      setCropSource(null);
+    }
+  };
+
   const canAi = draft.freeText.trim().length > 0 && !ai.isPending && envOk;
-  const displayCoverUri = pendingPhoto?.uri ?? entry.data?.coverUrl ?? null;
+  // While the per-day entry is still loading, seed the cover from the month
+  // query cache (the calendar/list already downloaded it) so opening a day
+  // shows its photo instantly instead of a blank slot that pops in later.
+  const cachedMonthCover = useMemo(() => {
+    if (entry.data) return null;
+    const monthEntries = queryClient.getQueryData<MonthEntry[]>([
+      'journal',
+      'month',
+      date.slice(0, 7),
+    ]);
+    return monthEntries?.find((e) => e.date === date)?.coverUrl ?? null;
+  }, [entry.data, queryClient, date]);
+  const displayCoverUri = pendingPhoto?.uri ?? entry.data?.coverUrl ?? cachedMonthCover;
   const pageIcon = entry.data?.icon;
 
   return (
@@ -321,13 +388,11 @@ function DayDrawerContent({
                   style={[
                     styles.saveBtn,
                     {
-                      backgroundColor: theme.text,
+                      backgroundColor: theme.accent,
                       opacity: isSaving ? 0.5 : 1,
                     },
                   ]}>
-                  <ThemedText
-                    type="smallBold"
-                    style={{ color: theme.background }}>
+                  <ThemedText type="smallBold" style={styles.saveBtnText}>
                     {isSaving ? '保存中…' : '保存'}
                   </ThemedText>
                 </Pressable>
@@ -337,10 +402,8 @@ function DayDrawerContent({
                 accessibilityRole="button"
                 accessibilityLabel="閉じる"
                 hitSlop={8}
-                style={styles.closeBtn}>
-                <ThemedText type="subtitle" themeColor="textSecondary">
-                  ✕
-                </ThemedText>
+                style={[styles.closeBtn, { backgroundColor: theme.backgroundElement }]}>
+                <X size={16} color={theme.textSecondary} strokeWidth={2} />
               </Pressable>
             </View>
           </View>
@@ -354,31 +417,35 @@ function DayDrawerContent({
               <View
                 style={[
                   styles.errorBanner,
-                  { backgroundColor: theme.backgroundElement, marginHorizontal: Spacing.four },
+                  {
+                    backgroundColor: theme.backgroundElement,
+                    borderLeftColor: theme.danger,
+                    marginHorizontal: Spacing.four,
+                  },
                 ]}>
                 {entry.error && (
-                  <ThemedText type="small" style={styles.errorText}>
-                    📥 読み込み: {entry.error.message}
+                  <ThemedText type="small" style={[styles.errorText, { color: theme.danger }]}>
+                    読み込み: {entry.error.message}
                   </ThemedText>
                 )}
                 {saveAll.error && (
-                  <ThemedText type="small" style={styles.errorText}>
-                    💾 保存: {saveAll.error.message}
+                  <ThemedText type="small" style={[styles.errorText, { color: theme.danger }]}>
+                    保存: {saveAll.error.message}
                   </ThemedText>
                 )}
                 {uploadCover.error && (
-                  <ThemedText type="small" style={styles.errorText}>
-                    🖼️ カバー: {uploadCover.error.message}
+                  <ThemedText type="small" style={[styles.errorText, { color: theme.danger }]}>
+                    カバー: {uploadCover.error.message}
                   </ThemedText>
                 )}
                 {removeCover.error && (
-                  <ThemedText type="small" style={styles.errorText}>
-                    🗑️ カバー削除: {removeCover.error.message}
+                  <ThemedText type="small" style={[styles.errorText, { color: theme.danger }]}>
+                    カバー削除: {removeCover.error.message}
                   </ThemedText>
                 )}
                 {ai.error && (
-                  <ThemedText type="small" style={styles.errorText}>
-                    ✨ AI: {ai.error.message}
+                  <ThemedText type="small" style={[styles.errorText, { color: theme.danger }]}>
+                    AIまとめ: {ai.error.message}
                   </ThemedText>
                 )}
               </View>
@@ -393,7 +460,12 @@ function DayDrawerContent({
               style={styles.coverPressable}>
               {displayCoverUri ? (
                 <View style={styles.coverWrap}>
-                  <Image source={{ uri: displayCoverUri }} style={styles.coverImage} />
+                  <CoverImage
+                    source={coverImageSource(displayCoverUri)}
+                    style={styles.coverImage}
+                    contentFit="cover"
+                    transition={150}
+                  />
                   {pendingPhoto && (
                     <View
                       style={[
@@ -422,13 +494,10 @@ function DayDrawerContent({
                   </Pressable>
                 </View>
               ) : (
-                <View
-                  style={[
-                    styles.coverEmpty,
-                    { backgroundColor: theme.backgroundElement },
-                  ]}>
+                <View style={[styles.coverEmpty, { borderColor: theme.backgroundSelected }]}>
+                  <Camera size={20} color={theme.textSecondary} strokeWidth={1.6} />
                   <ThemedText type="small" themeColor="textSecondary">
-                    📷 カバー写真を選ぶ
+                    カバー写真を選ぶ
                   </ThemedText>
                 </View>
               )}
@@ -450,35 +519,43 @@ function DayDrawerContent({
 
               {/* DIARY — inline TextInput, AI button always visible */}
               <View style={styles.diaryGroup}>
+                <View style={styles.sectionHeader}>
+                  <ThemedText type="smallBold" themeColor="textSecondary">
+                    DIARY
+                  </ThemedText>
+                  <Pressable
+                    onPress={handleAi}
+                    disabled={!canAi}
+                    accessibilityRole="button"
+                    accessibilityLabel="本文からDIARYをまとめる"
+                    accessibilityState={{ disabled: !canAi, busy: ai.isPending }}
+                    hitSlop={8}
+                    style={({ pressed }) => [
+                      styles.ghostBtn,
+                      { opacity: !canAi ? 0.35 : pressed ? 0.6 : 1 },
+                    ]}>
+                    {ai.isPending ? (
+                      <ActivityIndicator size="small" color={theme.accent} />
+                    ) : (
+                      <Sparkles size={13} color={theme.accent} strokeWidth={2} />
+                    )}
+                    <ThemedText type="smallBold" style={{ color: theme.accent }}>
+                      {ai.isPending ? 'まとめ中' : 'まとめる'}
+                    </ThemedText>
+                  </Pressable>
+                </View>
                 <TextInput
                   multiline
                   textAlignVertical="top"
                   value={draft.diary}
                   onChangeText={(value) => onAction({ type: 'set-diary', value })}
-                  placeholder="DIARY（AIで本文をまとめてここに）"
+                  placeholder="今日をひとことで（✨で本文からまとめられます）"
                   placeholderTextColor={theme.textSecondary}
                   style={[
                     styles.diaryInput,
                     { color: theme.text, backgroundColor: theme.backgroundElement },
                   ]}
                 />
-                <Pressable
-                  onPress={handleAi}
-                  disabled={!canAi}
-                  accessibilityRole="button"
-                  accessibilityState={{ disabled: !canAi, busy: ai.isPending }}
-                  style={[
-                    styles.aiBtn,
-                    {
-                      backgroundColor: aiBg,
-                      opacity: canAi ? 1 : 0.5,
-                    },
-                  ]}>
-                  <Sparkles size={14} color={aiFg} strokeWidth={2} />
-                  <ThemedText type="smallBold" style={{ color: aiFg }}>
-                    {ai.isPending ? '整理中…' : '本文を DIARY にまとめる'}
-                  </ThemedText>
-                </Pressable>
               </View>
 
               {/* 予定 — Google Calendar; renders nothing when disconnected */}
@@ -486,11 +563,8 @@ function DayDrawerContent({
 
               {/* 本文 — only section with header + view/edit toggle */}
               <View style={styles.bodySection}>
-                <View style={styles.bodyHeader}>
-                  <ThemedText
-                    type="smallBold"
-                    themeColor="textSecondary"
-                    style={styles.bodyLabel}>
+                <View style={styles.sectionHeader}>
+                  <ThemedText type="smallBold" themeColor="textSecondary">
                     本文
                   </ThemedText>
                   <Pressable
@@ -500,12 +574,18 @@ function DayDrawerContent({
                     accessibilityRole="button"
                     accessibilityLabel={bodyMode === 'view' ? '本文を編集' : '本文の編集を閉じる'}
                     hitSlop={8}
-                    style={[
-                      styles.bodyToggle,
-                      { backgroundColor: theme.backgroundElement },
-                    ]}>
-                    <ThemedText type="smallBold">
-                      {bodyMode === 'view' ? '✎ 編集' : '✓ 完了'}
+                    style={({ pressed }) => [styles.ghostBtn, { opacity: pressed ? 0.6 : 1 }]}>
+                    {bodyMode === 'view' ? (
+                      <PenLine size={13} color={theme.textSecondary} strokeWidth={2} />
+                    ) : (
+                      <Check size={13} color={theme.accent} strokeWidth={2.5} />
+                    )}
+                    <ThemedText
+                      type="smallBold"
+                      style={{
+                        color: bodyMode === 'view' ? theme.textSecondary : theme.accent,
+                      }}>
+                      {bodyMode === 'view' ? '編集' : '完了'}
                     </ThemedText>
                   </Pressable>
                 </View>
@@ -599,7 +679,7 @@ function DayDrawerContent({
               </Pressable>
               <Pressable
                 onPress={overwriteServer}
-                style={[styles.conflictBtn, { backgroundColor: '#cc4444' }]}>
+                style={[styles.conflictBtn, { backgroundColor: theme.danger }]}>
                 <ThemedText type="smallBold" style={styles.conflictBtnDanger}>
                   上書き保存
                 </ThemedText>
@@ -608,6 +688,13 @@ function DayDrawerContent({
           </View>
         </View>
       </Modal>
+
+      <CoverCropModal
+        source={cropSource}
+        busy={cropping}
+        onCancel={() => setCropSource(null)}
+        onConfirm={handleCropConfirm}
+      />
     </ThemedView>
   );
 }
@@ -673,21 +760,37 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   saveBtn: {
-    paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.one,
-    borderRadius: Spacing.two,
+    height: 32,
+    paddingHorizontal: Spacing.three + 2,
+    borderRadius: Radius.lg,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  saveBtnText: {
+    color: '#ffffff',
   },
   closeBtn: {
-    paddingHorizontal: Spacing.one,
-    paddingVertical: 0,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   scrollContent: {
     paddingBottom: Spacing.five,
     gap: Spacing.four,
   },
-  // Cover — full bleed, no horizontal padding
-  coverPressable: { width: '100%' },
-  coverWrap: { width: '100%', position: 'relative' },
+  // Cover — a rounded card, aligned with the body's horizontal rhythm.
+  coverPressable: {
+    width: '100%',
+    paddingHorizontal: Spacing.four,
+  },
+  coverWrap: {
+    width: '100%',
+    position: 'relative',
+    borderRadius: Radius.lg,
+    overflow: 'hidden',
+  },
   coverImage: {
     width: '100%',
     aspectRatio: 16 / 9,
@@ -695,9 +798,13 @@ const styles = StyleSheet.create({
   },
   coverEmpty: {
     width: '100%',
-    aspectRatio: 16 / 9,
+    height: 96,
+    borderRadius: Radius.lg,
+    borderWidth: 1.5,
+    borderStyle: 'dashed',
     alignItems: 'center',
     justifyContent: 'center',
+    gap: Spacing.one,
   },
   coverBadge: {
     position: 'absolute',
@@ -724,44 +831,40 @@ const styles = StyleSheet.create({
     gap: Spacing.four,
   },
 
-  diaryGroup: { gap: Spacing.two },
-  diaryInput: {
-    minHeight: 80,
-    padding: Spacing.three,
-    borderRadius: Spacing.two,
-    fontSize: 15,
-    lineHeight: 22,
-  },
-  aiBtn: {
-    flexDirection: 'row',
-    gap: Spacing.one,
-    paddingVertical: Spacing.three,
-    borderRadius: Spacing.two,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-
-  bodySection: { gap: Spacing.two },
-  bodyHeader: {
+  sectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    minHeight: 30,
   },
-  bodyLabel: { textTransform: 'uppercase' },
-  bodyToggle: {
-    paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.one,
-    borderRadius: Spacing.two,
+  diaryGroup: { gap: Spacing.two },
+  diaryInput: {
+    minHeight: 88,
+    padding: Spacing.three,
+    borderRadius: Radius.lg,
+    fontSize: 15,
+    lineHeight: 22,
   },
+  // Text-style ("ghost") header actions: no fill, just icon + short label —
+  // pills next to section labels read heavier than the content they act on.
+  ghostBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    height: 30,
+    paddingHorizontal: Spacing.one,
+  },
+
+  bodySection: { gap: Spacing.two },
   viewBlock: {
     padding: Spacing.three,
-    borderRadius: Spacing.two,
+    borderRadius: Radius.lg,
     minHeight: 80,
   },
   freeText: {
     minHeight: 240,
     padding: Spacing.three,
-    borderRadius: Spacing.two,
+    borderRadius: Radius.lg,
     fontSize: 16,
     lineHeight: 24,
   },
@@ -775,12 +878,11 @@ const styles = StyleSheet.create({
 
   errorBanner: {
     padding: Spacing.three,
-    borderRadius: Spacing.two,
+    borderRadius: Radius.lg,
     gap: Spacing.one,
     borderLeftWidth: 3,
-    borderLeftColor: '#cc4444',
   },
-  errorText: { color: '#cc4444' },
+  errorText: {},
 
   conflictOverlay: {
     flex: 1,
@@ -790,7 +892,7 @@ const styles = StyleSheet.create({
   },
   conflictBox: {
     padding: Spacing.four,
-    borderRadius: Spacing.three,
+    borderRadius: Radius.xl,
     gap: Spacing.three,
     maxWidth: 560,
     alignSelf: 'center',
@@ -798,7 +900,7 @@ const styles = StyleSheet.create({
   },
   conflictPreview: {
     padding: Spacing.three,
-    borderRadius: Spacing.two,
+    borderRadius: Radius.lg,
     gap: Spacing.one,
     maxHeight: 240,
   },
@@ -813,7 +915,7 @@ const styles = StyleSheet.create({
     minWidth: 110,
     paddingVertical: Spacing.three,
     paddingHorizontal: Spacing.three,
-    borderRadius: Spacing.two,
+    borderRadius: Radius.lg,
     alignItems: 'center',
   },
   conflictBtnDanger: { color: '#ffffff' },

@@ -50,8 +50,8 @@ export function useNotificationTap(): void {
     let cancelled = false;
 
     const openForDate = (dateKey: string) => {
-      // Calendar tab lives at `/(tabs)/index`. Navigating to '/' targets
-      // the same route in Expo Router's tab layout.
+      // The calendar tab (which consumes `?date=` by opening that day's
+      // drawer) is the index tab.
       router.navigate({ pathname: '/', params: { date: dateKey } });
     };
 

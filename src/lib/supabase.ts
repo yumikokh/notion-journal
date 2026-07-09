@@ -46,6 +46,19 @@ export function invokeNotionTodayGet(payload: { date: string }) {
 }
 
 /**
+ * Append one timestamped quick-capture line (`**HH:MM** text`) to the
+ * daily page body, creating the page when the day has none yet. Returns
+ * the body after the append so the client cache can be updated exactly.
+ */
+export function invokeNotionTodayAppend(payload: {
+  date: string;
+  timeLabel: string;
+  text: string;
+}) {
+  return invoke<{ notionPageId: string; bodyMarkdown: string }>('notion-today-append', payload);
+}
+
+/**
  * `notion-today-save` is split into two paths:
  *   - properties present, bodyMarkdown undefined → property-only update
  *   - bodyMarkdown present, properties undefined → body-only replacement
@@ -128,6 +141,15 @@ export function invokeNotionMonthGet(payload: { yearMonth: string }) {
   return invoke<{ entries: MonthEntry[] }>('notion-month-get', payload);
 }
 
+/**
+ * Date of the earliest Daily entry (YYYY-MM-DD; null when the DB is empty).
+ * Anchors the week/month pickers to the user's real journaling history
+ * instead of an arbitrary rolling window.
+ */
+export function invokeNotionJournalRange() {
+  return invoke<{ earliest: string | null }>('notion-journal-range', {});
+}
+
 export function invokeAiWeeklyAnalyze(payload: { weekStart: string; weekEnd: string }) {
   return invoke<unknown>('ai-weekly-analyze', payload);
 }
@@ -136,9 +158,23 @@ export function invokeAiWeeklyAnalyze(payload: { weekStart: string; weekEnd: str
  * Read the weekly reflection (Notion "↩️ Reflection DB", Type=Weekly) for a
  * Monday→Sunday range. Returns the raw Notion page (or null); the caller maps
  * it via `notionPageToWeeklyReflection`.
+ *
+ * `bodyMarkdown` is the page body — the full saved AI analysis (#16). It is
+ * optional so the client keeps working against an older deployment of
+ * `notion-weekly-get` that doesn't return it yet; callers should fall back
+ * with `?? ''`.
  */
 export function invokeNotionWeeklyGet(payload: { weekStart: string; weekEnd: string }) {
-  return invoke<{ page: NotionPage | null }>('notion-weekly-get', payload);
+  return invoke<{ page: NotionPage | null; bodyMarkdown?: string }>('notion-weekly-get', payload);
+}
+
+/**
+ * List the Date property of every saved weekly reflection (Type=Weekly in
+ * the Reflection DB). Dates may fall on any day inside their week; callers
+ * normalize them to Monday keys. Backs the week picker's reflected marks.
+ */
+export function invokeNotionWeeklyList() {
+  return invoke<{ dates: string[] }>('notion-weekly-list', {});
 }
 
 /**

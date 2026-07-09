@@ -11,9 +11,18 @@
  *   Date (date)                → date
  *   Type (select: "Weekly")    → fixed; this app reads/writes Weekly only
  *   Name (title)               → page title (set to the week label on create)
+ *   Page body (markdown)       → bodyMarkdown
  *
  * 充電/放電ログは Daily 本文（Moment / 自由記述）の役割なので、この型には
  * 含めない。Weekly は分析的なふりかえりに専念する。
+ *
+ * Sync model (established for #16 v2 — read the comment on `hasSavedReflection`
+ * too):
+ *   - The four rich_text properties are the reflection's "conclusion" — owned
+ *     by the user, editable in the app.
+ *   - The page body is the AI's full analysis report — replaced wholesale on
+ *     AI save, read-only in the app (edits made directly in Notion show up
+ *     next time the page is fetched).
  */
 
 import type { NotionPage, NotionRichText } from '@/features/notion/types';
@@ -45,6 +54,13 @@ export type WeeklyReflection = {
   problem: string; // よくなかったこと
   tryNext: string; // トライできること
   nextGoal: string; // 次の具体目標
+  /**
+   * The Notion page body as markdown (the full saved AI analysis). This is
+   * the AI's full report; the app renders it read-only so edits made
+   * directly in Notion show up. Empty when no page exists or the page has
+   * no body yet.
+   */
+  bodyMarkdown: string;
 };
 
 function richTextToString(rt: NotionRichText[] | undefined): string {
@@ -67,6 +83,7 @@ export function emptyWeeklyReflection(weekStart: string, weekEnd: string): Weekl
     problem: '',
     tryNext: '',
     nextGoal: '',
+    bodyMarkdown: '',
   };
 }
 
@@ -78,6 +95,7 @@ export function notionPageToWeeklyReflection(
   page: NotionPage | null,
   weekStart: string,
   weekEnd: string,
+  bodyMarkdown = '',
 ): WeeklyReflection {
   if (!page) return emptyWeeklyReflection(weekStart, weekEnd);
 
@@ -98,6 +116,7 @@ export function notionPageToWeeklyReflection(
     problem: readText(REFLECTION_PROPERTY_NAMES.problem),
     tryNext: readText(REFLECTION_PROPERTY_NAMES.tryNext),
     nextGoal: readText(REFLECTION_PROPERTY_NAMES.nextGoal),
+    bodyMarkdown,
   };
 }
 
@@ -122,12 +141,18 @@ export function reflectionToNotionUpdate(r: WeeklyReflection): NotionReflectionU
 
 /**
  * True when a Weekly page exists in Notion for this week AND it carries at
- * least one non-empty reflection field. Used by the Reflect screen to show
- * the saved reflection (and skip a wasted re-analysis) when reopening a week.
+ * least one non-empty reflection field OR a non-empty body. Used by the
+ * Reflect screen to show the saved reflection (and skip a wasted
+ * re-analysis) when reopening a week. The body counts too since a page can
+ * hold a full AI analysis with the four conclusion fields still blank.
  */
 export function hasSavedReflection(r: WeeklyReflection): boolean {
   return (
     r.notionPageId !== null &&
-    (r.good !== '' || r.problem !== '' || r.tryNext !== '' || r.nextGoal !== '')
+    (r.bodyMarkdown.trim() !== '' ||
+      r.good !== '' ||
+      r.problem !== '' ||
+      r.tryNext !== '' ||
+      r.nextGoal !== '')
   );
 }

@@ -12,7 +12,7 @@ import { notionChipColor } from '@/features/notion/colors';
 const SCHEME = 'light' as const;
 const theme = Colors.light;
 
-type Style = { backgroundColor?: string; color?: string };
+type Style = { backgroundColor?: string; color?: string; width?: number };
 type HostNode = {
   type: string;
   props: { accessibilityLabel?: string; style?: Style | Style[] };
@@ -46,48 +46,62 @@ function allNodes(node: unknown, out: HostNode[] = []): HostNode[] {
   return out;
 }
 
-/** The tinted background lives on the Pressable's host View (style flattened). */
-function buttonBackground(nodes: HostNode[], feeling: string): string | undefined {
-  const view = nodes.find(
+/** Each stop is a Pressable (host View) whose child View is the tinted dot. */
+function dotStyle(nodes: HostNode[], feeling: string): Style {
+  const stop = nodes.find(
     (n) => n.type === 'View' && n.props.accessibilityLabel === `Feeling ${feeling}`,
   );
-  return flatStyle(view?.props.style).backgroundColor;
+  const dot = (stop?.children ?? []).find(
+    (c): c is HostNode => typeof c === 'object' && c.type === 'View',
+  );
+  return flatStyle(dot?.props.style);
 }
 
-/** The face color lives on the innermost Text whose only child is the glyph. */
-function faceColor(nodes: HostNode[], feeling: string): string | undefined {
-  const text = nodes.find((n) => n.type === 'Text' && n.children?.[0] === feeling);
-  return flatStyle(text?.props.style).color;
+/** The value chip is the Text showing the selected kaomoji (or the 気分 placeholder). */
+function valueChipText(nodes: HostNode[]): HostNode | undefined {
+  return nodes.find(
+    (n) =>
+      n.type === 'Text' &&
+      typeof n.children?.[0] === 'string' &&
+      (FEELINGS as readonly string[]).includes(n.children[0] as string),
+  );
 }
 
-describe('FeelingPicker', () => {
-  it('renders one button per feeling', () => {
+describe('FeelingPicker (gauge)', () => {
+  it('renders one tappable stop per feeling', () => {
     const nodes = allNodes(render(<FeelingPicker value={null} onChange={jest.fn()} />).toJSON());
     for (const feeling of FEELINGS) {
-      const view = nodes.find(
+      const stop = nodes.find(
         (n) => n.type === 'View' && n.props.accessibilityLabel === `Feeling ${feeling}`,
       );
-      expect(view).toBeDefined();
+      expect(stop).toBeDefined();
     }
   });
 
-  it('keeps unselected faces in the secondary text color', () => {
+  it('tints every dot with its saturated Notion color even without a colorMap', () => {
+    // Regression guards: options must not fall back to gray `default`, and
+    // dots use the strong (text) end of the palette — the pale background
+    // tint was invisible at dot size.
     const nodes = allNodes(render(<FeelingPicker value={null} onChange={jest.fn()} />).toJSON());
     for (const feeling of FEELINGS) {
-      expect(faceColor(nodes, feeling)).toBe(theme.textSecondary);
+      const chip = notionChipColor(FEELING_NOTION_COLORS[feeling], SCHEME);
+      expect(dotStyle(nodes, feeling).backgroundColor).toBe(chip.text);
     }
   });
 
-  it('tints the selected face with its Notion color, falling back to the static map', () => {
-    // No colorMap → every feeling must still use its known Notion color when
-    // selected (the regression: previously these fell back to gray `default`).
+  it('grows the selected dot and shows its kaomoji in the value chip', () => {
     for (const selected of FEELINGS) {
       const chip = notionChipColor(FEELING_NOTION_COLORS[selected], SCHEME);
       const nodes = allNodes(
         render(<FeelingPicker value={selected} onChange={jest.fn()} />).toJSON(),
       );
-      expect(buttonBackground(nodes, selected)).toBe(chip.background);
-      expect(faceColor(nodes, selected)).toBe(chip.text);
+      const selectedDot = dotStyle(nodes, selected);
+      const otherDot = dotStyle(nodes, FEELINGS.find((f) => f !== selected)!);
+      expect(selectedDot.width ?? 0).toBeGreaterThan(otherDot.width ?? 0);
+
+      const chipText = valueChipText(nodes);
+      expect(chipText?.children?.[0]).toBe(selected);
+      expect(flatStyle(chipText?.props.style).color).toBe(chip.text);
     }
   });
 
@@ -98,17 +112,15 @@ describe('FeelingPicker', () => {
         <FeelingPicker value={selected} onChange={jest.fn()} colorMap={{ [selected]: 'green' }} />,
       ).toJSON(),
     );
-    expect(buttonBackground(nodes, selected)).toBe(notionChipColor('green', SCHEME).background);
+    expect(dotStyle(nodes, selected).backgroundColor).toBe(notionChipColor('green', SCHEME).text);
   });
 
-  it('paints the tinted background only on the selected face', () => {
-    const selected = FEELINGS[0];
-    const nodes = allNodes(render(<FeelingPicker value={selected} onChange={jest.fn()} />).toJSON());
-
-    expect(buttonBackground(nodes, selected)).toBe(
-      notionChipColor(FEELING_NOTION_COLORS[selected], SCHEME).background,
-    );
-    expect(buttonBackground(nodes, FEELINGS[1])).toBe(theme.backgroundElement);
+  it('shows the placeholder chip when nothing is selected', () => {
+    const nodes = allNodes(render(<FeelingPicker value={null} onChange={jest.fn()} />).toJSON());
+    expect(valueChipText(nodes)).toBeUndefined();
+    const placeholder = nodes.find((n) => n.type === 'Text' && n.children?.[0] === '気分');
+    expect(placeholder).toBeDefined();
+    expect(flatStyle(placeholder?.props.style).color).toBe(theme.textSecondary);
   });
 
   it('emits the feeling on press, and null when the selected one is pressed again', () => {

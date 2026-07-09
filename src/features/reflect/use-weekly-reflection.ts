@@ -22,11 +22,14 @@ export function useWeeklyReflection(range: WeekRange, options: UseWeeklyReflecti
   return useQuery<WeeklyReflection>({
     queryKey: ['weekly-reflection', range.start, range.end],
     queryFn: async () => {
-      const { page } = await invokeNotionWeeklyGet({
+      const { page, bodyMarkdown } = await invokeNotionWeeklyGet({
         weekStart: range.start,
         weekEnd: range.end,
       });
-      return notionPageToWeeklyReflection(page, range.start, range.end);
+      // `bodyMarkdown` is optional on the response type only so the client
+      // keeps working against an older `notion-weekly-get` deployment that
+      // doesn't return it; default to '' in that case.
+      return notionPageToWeeklyReflection(page, range.start, range.end, bodyMarkdown ?? '');
     },
     enabled: options.enabled ?? true,
   });

@@ -28,12 +28,12 @@ export type ReminderData = {
 
 const CONTENT_BY_KIND: Record<ReminderKind, { title: string; body: string }> = {
   daily: {
-    title: '今日の記録、書いてみる？',
-    body: 'ひとことだけでも残しておくと、あとで効きます。',
+    title: '今日はどんな一日でしたか？',
+    body: 'ひとことだけでも大丈夫。あとで読み返すと、きっとうれしくなります 🌙',
   },
   weekly: {
-    title: 'ウィークリーふりかえり',
-    body: '今週どうだった？ 充電・放電を振り返ろう。',
+    title: '今週もおつかれさまでした',
+    body: 'ゆっくりひと息つきながら、一週間をふりかえってみませんか？',
   },
 };
 

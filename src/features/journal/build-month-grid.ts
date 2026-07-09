@@ -10,28 +10,34 @@ export type MonthCell = {
 };
 
 /**
- * Build a 6-week × 7-day grid (42 cells) for the given month.
+ * Build the weeks of a month as rows of 7 cells, Sunday-first.
  *
- * Week starts on **Sunday** (locale-independent). Leading days come from
- * the previous month, trailing days from the next month, so the grid is
- * always exactly 42 cells and rendered as a flat list.
+ * Unlike a fixed 6-week grid, this returns only the weeks the month
+ * actually spans (4–6), so months can be stacked in a continuous
+ * vertical scroll without dead rows. Leading/trailing cells that belong
+ * to adjacent months are included to keep rows at 7 cells but marked
+ * `inMonth: false` (the calendar renders them blank — the adjacent month
+ * owns those days in its own section).
  *
  * `year` is the full year (e.g. 2026). `month` is **0-indexed** to match
  * the JavaScript `Date` constructor (0 = January, 11 = December).
  */
-export function buildMonthGrid(year: number, month: number): MonthCell[] {
+export function buildMonthWeeks(year: number, month: number): MonthCell[][] {
   const firstDayOfWeek = new Date(year, month, 1).getDay(); // 0 = Sunday
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const totalCells = Math.ceil((firstDayOfWeek + daysInMonth) / 7) * 7;
   const start = new Date(year, month, 1 - firstDayOfWeek);
 
-  const cells: MonthCell[] = [];
-  for (let i = 0; i < 42; i++) {
+  const weeks: MonthCell[][] = [];
+  for (let i = 0; i < totalCells; i++) {
+    if (i % 7 === 0) weeks.push([]);
     const d = new Date(start);
     d.setDate(start.getDate() + i);
-    cells.push({
+    weeks[weeks.length - 1].push({
       date: d,
       dateKey: toDateKey(d),
       inMonth: d.getMonth() === month && d.getFullYear() === year,
     });
   }
-  return cells;
+  return weeks;
 }

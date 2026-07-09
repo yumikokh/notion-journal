@@ -5,21 +5,118 @@
 
 import { Platform } from 'react-native';
 
+/**
+ * Warm, gentle palette: off-white paper tones in light mode, warm charcoal
+ * in dark mode. `accent` is a soft terracotta used sparingly (today marker,
+ * primary buttons); `accentSoft` is its background-strength counterpart.
+ * `holiday` / `saturday` keep the Japanese calendar convention (red Sun/
+ * holiday, blue Sat) but desaturated so the grid stays calm.
+ */
+/**
+ * Selectable palettes (settings > デザイン). Every palette provides the same
+ * token set for light and dark; semantic colors (danger / holiday /
+ * saturday) stay constant across palettes.
+ */
+export const Palettes = {
+  // 初代「クリーム × テラコッタ」— the original warm pairing.
+  terracotta: {
+    label: 'テラコッタ',
+    light: {
+      text: '#3B342B',
+      background: '#FBF8F3',
+      backgroundElement: '#F2EDE5',
+      backgroundSelected: '#E8E0D2',
+      textSecondary: '#8B8272',
+      accent: '#C67B5C',
+      accentSoft: '#F6E3D9',
+      danger: '#C05F5F',
+      holiday: '#C67878',
+      saturday: '#7B93B5',
+    },
+    dark: {
+      text: '#EDE6DA',
+      background: '#181512',
+      backgroundElement: '#25211B',
+      backgroundSelected: '#332D24',
+      textSecondary: '#A89E8C',
+      accent: '#D99070',
+      accentSoft: '#3C2E25',
+      danger: '#D98A8A',
+      holiday: '#D99090',
+      saturday: '#93A8C8',
+    },
+  },
+  // A「クリーム × 墨」— the warm paper ground with a sumi-ink accent.
+  cream: {
+    label: 'クリーム',
+    light: {
+      text: '#3B342B',
+      background: '#FBF8F3',
+      backgroundElement: '#F2EDE5',
+      backgroundSelected: '#E8E0D2',
+      textSecondary: '#8B8272',
+      accent: '#55493C',
+      accentSoft: '#E7E0D4',
+      danger: '#C05F5F',
+      holiday: '#C67878',
+      saturday: '#7B93B5',
+    },
+    dark: {
+      text: '#EDE6DA',
+      background: '#181512',
+      backgroundElement: '#25211B',
+      backgroundSelected: '#332D24',
+      textSecondary: '#A89E8C',
+      accent: '#C9BBA6',
+      accentSoft: '#3A342A',
+      danger: '#D98A8A',
+      holiday: '#D99090',
+      saturday: '#93A8C8',
+    },
+  },
+  // E「クールグレー × 鉄墨」— a neutral, tool-like ground where photos and
+  // kaomoji carry the color.
+  coolGray: {
+    label: 'クールグレー',
+    light: {
+      text: '#2F3033',
+      background: '#F7F7F8',
+      backgroundElement: '#ECEDEF',
+      backgroundSelected: '#E0E1E5',
+      textSecondary: '#85868B',
+      accent: '#3F4043',
+      accentSoft: '#E5E6E9',
+      danger: '#C05F5F',
+      holiday: '#C67878',
+      saturday: '#7B93B5',
+    },
+    dark: {
+      text: '#E7E7E9',
+      background: '#171719',
+      backgroundElement: '#222225',
+      backgroundSelected: '#2E2F33',
+      textSecondary: '#9C9DA2',
+      accent: '#B8B9BE',
+      accentSoft: '#2A2B2E',
+      danger: '#D98A8A',
+      holiday: '#D99090',
+      saturday: '#93A8C8',
+    },
+  },
+} as const;
+
+export type PaletteKey = keyof typeof Palettes;
+export const DEFAULT_PALETTE: PaletteKey = 'coolGray';
+
+/** Turn a persisted string back into a palette key (fallback: default). */
+export function parsePaletteKey(value: string | null | undefined): PaletteKey {
+  return value && value in Palettes ? (value as PaletteKey) : DEFAULT_PALETTE;
+}
+
+/** Static default palette — for tests and non-reactive call sites. */
 export const Colors = {
-  light: {
-    text: '#000000',
-    background: '#ffffff',
-    backgroundElement: '#F0F0F3',
-    backgroundSelected: '#E0E1E6',
-    textSecondary: '#60646C',
-  },
-  dark: {
-    text: '#ffffff',
-    background: '#000000',
-    backgroundElement: '#212225',
-    backgroundSelected: '#2E3135',
-    textSecondary: '#B0B4BA',
-  },
+  light: Palettes[DEFAULT_PALETTE].light,
+  dark: Palettes[DEFAULT_PALETTE].dark,
 } as const;
 
 export type ThemeColor = keyof typeof Colors.light & keyof typeof Colors.dark;
@@ -59,5 +156,14 @@ export const Spacing = {
   six: 64,
 } as const;
 
-export const BottomTabInset = Platform.select({ ios: 50, android: 80 }) ?? 0;
+/** Corner radii. Cards default to `lg`; small chips/thumbnails use `sm`/`md`. */
+export const Radius = {
+  sm: 8,
+  md: 12,
+  lg: 16,
+  xl: 20,
+} as const;
+
+// Clearance for the floating glass tab pill (52pt) + its bottom offset.
+export const BottomTabInset = Platform.select({ ios: 64, android: 80 }) ?? 0;
 export const MaxContentWidth = 800;

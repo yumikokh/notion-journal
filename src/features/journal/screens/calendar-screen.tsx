@@ -1,27 +1,48 @@
-import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
+import { useLocalSearchParams, useRootNavigationState, useRouter } from 'expo-router';
+import { BlurView } from 'expo-blur';
+import { GlassView, isLiquidGlassAvailable } from 'expo-glass-effect';
+import { LayoutList, PenLine, RotateCw, SlidersHorizontal } from 'lucide-react-native';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  Image,
+  Animated,
+  FlatList,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
   Pressable,
   RefreshControl,
-  ScrollView,
   StyleSheet,
+  Switch,
+  TextInput,
   View,
   useColorScheme,
+  type ViewToken,
 } from 'react-native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { ScreenContainer } from '@/components/screen-container';
 import { ThemedText } from '@/components/themed-text';
-import { Spacing } from '@/constants/theme';
-import { buildMonthGrid } from '@/features/journal/build-month-grid';
+import { ThemedView } from '@/components/themed-view';
+import { BottomTabInset, Radius, Spacing } from '@/constants/theme';
+import { buildMonthWeeks, type MonthCell } from '@/features/journal/build-month-grid';
 import {
   DEFAULT_PREFS,
+  MAX_MODES,
+  activeViewMode,
+  addMode,
   loadCalendarPrefs,
+  removeMode,
+  renameMode,
   saveCalendarPrefs,
   type CalendarPrefs,
+  type CalendarViewMode,
 } from '@/features/journal/calendar-prefs';
 import { DayDrawer } from '@/features/journal/components/day-drawer';
+import {
+  MonthSection,
+  monthSectionHeight,
+} from '@/features/journal/components/month-section';
 import { FEELINGS, type Feeling } from '@/features/journal/draft';
 import {
   COVER_TOGGLE_ICON,
@@ -29,126 +50,197 @@ import {
   habitIcon,
 } from '@/features/journal/habit-icons';
 import { useMonthEntries } from '@/features/journal/use-month-entries';
-import { notionChipColor } from '@/features/notion/colors';
+import { CaptureSheet } from '@/features/today/components/capture-sheet';
 import { useTheme } from '@/hooks/use-theme';
 import { toDateKey } from '@/lib/date';
 import { isSupabaseEnvConfigured } from '@/lib/env';
-import { getJapaneseHoliday } from '@/lib/holidays';
 import type { MonthEntry, NotionSelectColor } from '@/lib/supabase';
 
 const WEEKDAY_LABELS = ['日', '月', '火', '水', '木', '金', '土'];
-const CELL_DIARY_LINES = 4;
-const HOLIDAY_COLOR = '#cc4444';
-const CELL_ASPECT_RATIO = 0.78;
+/** Liquid glass needs iOS 26+; older systems get solid-color fallbacks. */
+const glassOk = isLiquidGlassAvailable();
+/** Cell height relative to width — taller than square so photos read well. */
+const CELL_HEIGHT_RATIO = 1.4;
+/**
+ * Vertical space the floating glass chrome (header bar + weekday strip)
+ * occupies over the list. The list gets a spacer of this height so content
+ * rests below the chrome, then slides beneath it while scrolling — which
+ * is what makes the glass actually refract.
+ */
+const HEADER_BAR_HEIGHT = 36;
+const WEEKDAY_STRIP_HEIGHT = 22;
+/** Chrome content below the top safe-area inset (the panel bleeds to y=0). */
+const CHROME_CONTENT_HEIGHT =
+  Spacing.one + HEADER_BAR_HEIGHT + Spacing.one + WEEKDAY_STRIP_HEIGHT + Spacing.two;
+const FLOATING_CHROME_HEIGHT = CHROME_CONTENT_HEIGHT + Spacing.two;
+/** How far the continuous calendar reaches (months before/after today). */
+const MONTHS_BACK = 24;
+const MONTHS_FORWARD = 1;
 
+type MonthItem = {
+  key: string; // YYYY-MM
+  year: number;
+  month: number; // 0-indexed
+  weeks: MonthCell[][];
+};
+
+/**
+ * Continuous vertically-scrolling calendar: months stack seamlessly in a
+ * FlatList (oldest at the top, tomorrow's month at the bottom), opening on
+ * the current month. Every month section fetches its own entries lazily as
+ * it enters the render window, so scrolling through years stays cheap.
+ */
 export function CalendarScreen() {
   const theme = useTheme();
   const scheme = useColorScheme() === 'dark' ? 'dark' : 'light';
   const envOk = isSupabaseEnvConfigured();
+  const queryClient = useQueryClient();
   const today = useMemo(() => new Date(), []);
   const todayKey = useMemo(() => toDateKey(today), [today]);
 
-  // Compute explicit cell width/height instead of relying on aspectRatio,
-  // because iOS Yoga lets content (wrapped diary lines, cover images) push
-  // cell heights past aspectRatio, leaving empty-row cells visibly shorter.
-  // Measure the grid container directly via onLayout — using window width
-  // would miss the ScreenContainer padding + iOS safe-area insets and let
-  // the 7th column wrap.
-  const [gridWidth, setGridWidth] = useState(0);
-  // Floor to avoid sub-pixel rounding pushing 7 × cellWidth past gridWidth,
-  // which makes the 7th column wrap on iOS Simulator (Web and real devices
-  // round differently).
-  const cellWidth = gridWidth > 0 ? Math.floor(gridWidth / 7) : 0;
-  const cellHeight = cellWidth / CELL_ASPECT_RATIO;
+  const months = useMemo<MonthItem[]>(() => {
+    const list: MonthItem[] = [];
+    for (let offset = -MONTHS_BACK; offset <= MONTHS_FORWARD; offset++) {
+      const d = new Date(today.getFullYear(), today.getMonth() + offset, 1);
+      list.push({
+        key: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`,
+        year: d.getFullYear(),
+        month: d.getMonth(),
+        weeks: buildMonthWeeks(d.getFullYear(), d.getMonth()),
+      });
+    }
+    return list;
+  }, [today]);
+  const currentMonthIndex = MONTHS_BACK;
 
-  const [view, setView] = useState({
-    year: today.getFullYear(),
-    month: today.getMonth(), // 0-indexed
-  });
+  // Cells are sized off the measured list width (screen minus our own
+  // horizontal padding). Floor to avoid sub-pixel rounding pushing the
+  // 7th column past the container on iOS.
+  const [gridWidth, setGridWidth] = useState(0);
+  const cellWidth = gridWidth > 0 ? Math.floor(gridWidth / 7) : 0;
+  const cellHeight = Math.round(cellWidth * CELL_HEIGHT_RATIO);
 
   const [prefs, setPrefs] = useState<CalendarPrefs>(DEFAULT_PREFS);
   useEffect(() => {
     loadCalendarPrefs().then(setPrefs);
   }, []);
 
-  // Filter panel visibility — hidden by default behind the action button.
-  const [showFilters, setShowFilters] = useState(false);
+  // View-mode sheet visibility (switch + customize the display modes).
+  // The backdrop fades while the sheet slides — animating the whole Modal
+  // with animationType="slide" would make the dim overlay rise with it.
+  const [modeSheetOpen, setModeSheetOpen] = useState(false);
+  const [sheetAnim] = useState(() => new Animated.Value(0));
+  const openModeSheet = useCallback(() => {
+    setModeSheetOpen(true);
+    Animated.timing(sheetAnim, { toValue: 1, duration: 220, useNativeDriver: true }).start();
+  }, [sheetAnim]);
+  const closeModeSheet = useCallback(() => {
+    Animated.timing(sheetAnim, { toValue: 0, duration: 180, useNativeDriver: true }).start(() =>
+      setModeSheetOpen(false),
+    );
+  }, [sheetAnim]);
+  const viewMode = activeViewMode(prefs);
 
   const [drawerDate, setDrawerDate] = useState<string | null>(null);
+  const [captureOpen, setCaptureOpen] = useState(false);
 
-  const yearMonth = `${view.year}-${String(view.month + 1).padStart(2, '0')}`;
-  const cells = useMemo(() => buildMonthGrid(view.year, view.month), [view]);
+  const insets = useSafeAreaInsets();
 
-  const entries = useMonthEntries(yearMonth, { enabled: envOk });
+  // Header label follows the topmost visible month while scrolling.
+  const [visibleIndex, setVisibleIndex] = useState(currentMonthIndex);
+  const visibleMonth = months[visibleIndex] ?? months[currentMonthIndex];
 
-  const entryByDate = useMemo(() => {
-    const m = new Map<string, MonthEntry>();
-    entries.data?.forEach((e) => m.set(e.date, e));
-    return m;
-  }, [entries.data]);
-
-  const diaryList = useMemo(() => {
-    const list = (entries.data ?? []).filter((e) => (e.diary ?? '').trim().length > 0);
-    list.sort((a, b) => b.date.localeCompare(a.date));
-    return list;
-  }, [entries.data]);
+  const listRef = useRef<FlatList<MonthItem>>(null);
 
   /**
-   * Feeling → Notion select color, learned from any entries this month
-   * that use the feeling. Lets the FeelingPicker tint unselected options
-   * with the actual Notion color the user picked in their DB.
+   * The current month's entries back the pieces that need a single sample
+   * of the user's data (feeling → Notion color map for the day drawer,
+   * habit names for the filter chips). The per-month grids fetch their own.
    */
+  const currentYearMonth = months[currentMonthIndex].key;
+  const currentEntries = useMonthEntries(currentYearMonth, { enabled: envOk });
+
   const feelingColorMap = useMemo(() => {
     const m: Partial<Record<Feeling, NotionSelectColor | null>> = {};
-    entries.data?.forEach((e) => {
+    currentEntries.data?.forEach((e: MonthEntry) => {
       if (!e.feeling || !FEELINGS.includes(e.feeling as Feeling)) return;
       const key = e.feeling as Feeling;
       if (!(key in m)) m[key] = e.feelingColor;
     });
     return m;
-  }, [entries.data]);
+  }, [currentEntries.data]);
 
-  /**
-   * Habit names discovered from this month's pages. Server returns the raw
-   * Notion property names (e.g. "Output", "Book"); we preserve their order
-   * by tracking first-seen position.
-   */
   const habitNames = useMemo(() => {
     const seen: string[] = [];
-    entries.data?.forEach((e) => {
+    currentEntries.data?.forEach((e: MonthEntry) => {
       for (const name of Object.keys(e.habits ?? {})) {
         if (!seen.includes(name)) seen.push(name);
       }
     });
     return seen;
-  }, [entries.data]);
-
-  const prevMonth = () =>
-    setView((p) => (p.month === 0 ? { year: p.year - 1, month: 11 } : { ...p, month: p.month - 1 }));
-  const nextMonth = () =>
-    setView((p) => (p.month === 11 ? { year: p.year + 1, month: 0 } : { ...p, month: p.month + 1 }));
-  const goToday = () => setView({ year: today.getFullYear(), month: today.getMonth() });
+  }, [currentEntries.data]);
 
   const openDay = useCallback((dateKey: string) => {
     setDrawerDate(dateKey);
   }, []);
   const closeDrawer = useCallback(() => setDrawerDate(null), []);
 
+  const scrollToMonth = useCallback(
+    (year: number, month: number, animated: boolean) => {
+      const key = `${year}-${String(month + 1).padStart(2, '0')}`;
+      const index = months.findIndex((m) => m.key === key);
+      if (index >= 0) {
+        listRef.current?.scrollToIndex({
+          index,
+          animated,
+          viewOffset: FLOATING_CHROME_HEIGHT,
+        });
+      }
+    },
+    [months],
+  );
+  const scrollToToday = useCallback(() => {
+    listRef.current?.scrollToIndex({
+      index: currentMonthIndex,
+      animated: true,
+      viewOffset: FLOATING_CHROME_HEIGHT,
+    });
+  }, [currentMonthIndex]);
+
+  // Jump to the current month once the list has laid out. `initialScrollIndex`
+  // can't express the floating-chrome viewOffset, and the `contentOffset`
+  // prop is unreliable under FlatList virtualization — an explicit one-shot
+  // scroll on layout is.
+  const didInitScroll = useRef(false);
+  const initialScrollToToday = useCallback(() => {
+    if (didInitScroll.current) return;
+    didInitScroll.current = true;
+    listRef.current?.scrollToIndex({
+      index: currentMonthIndex,
+      animated: false,
+      viewOffset: FLOATING_CHROME_HEIGHT,
+    });
+  }, [currentMonthIndex]);
+
   // Deep link from a tapped reminder notification: `/(tabs)?date=YYYY-MM-DD`.
   // The URL is the external system here — when the param changes we mirror
-  // it into local state (month + drawer date) and then clear the param so
-  // navigating back to the calendar tab doesn't re-trigger the drawer.
+  // it into local state (scroll position + drawer date) and then clear the
+  // param so navigating back to the calendar tab doesn't re-trigger it.
   const params = useLocalSearchParams<{ date?: string | string[] }>();
   const router = useRouter();
+  // A cold-start deep link delivers the param before the root navigator has
+  // mounted; touching the router then throws. Wait for the nav-state key.
+  const navReady = Boolean(useRootNavigationState()?.key);
   useEffect(() => {
+    if (!navReady) return;
     const raw = Array.isArray(params.date) ? params.date[0] : params.date;
     if (!raw || !/^\d{4}-\d{2}-\d{2}$/.test(raw)) return;
     const [yearStr, monthStr] = raw.split('-');
+    scrollToMonth(Number(yearStr), Number(monthStr) - 1, false);
     // eslint-disable-next-line react-hooks/set-state-in-effect -- syncing URL param into local UI state on change is exactly the subscription pattern.
-    setView({ year: Number(yearStr), month: Number(monthStr) - 1 });
     setDrawerDate(raw);
     router.setParams({ date: undefined });
-  }, [params.date, router]);
+  }, [navReady, params.date, router, scrollToMonth]);
 
   const updatePrefs = useCallback((mutate: (prev: CalendarPrefs) => CalendarPrefs) => {
     setPrefs((prev) => {
@@ -158,410 +250,605 @@ export function CalendarScreen() {
     });
   }, []);
 
-  const toggleHabit = useCallback(
-    (name: string) =>
+  const setActiveMode = useCallback(
+    (index: number) => updatePrefs((prev) => ({ ...prev, activeMode: index })),
+    [updatePrefs],
+  );
+  /** Edit the currently-selected mode's contents (persisted immediately). */
+  const updateActiveMode = useCallback(
+    (mutate: (mode: CalendarViewMode) => CalendarViewMode) =>
       updatePrefs((prev) => ({
         ...prev,
-        habitOverlay: prev.habitOverlay.includes(name)
-          ? prev.habitOverlay.filter((k) => k !== name)
-          : [...prev.habitOverlay, name],
+        modes: prev.modes.map((m, i) => (i === prev.activeMode ? mutate(m) : m)),
       })),
     [updatePrefs],
   );
-
-  const toggleShowDiary = useCallback(
-    () => updatePrefs((prev) => ({ ...prev, showDiary: !prev.showDiary })),
-    [updatePrefs],
+  const toggleHabitInMode = useCallback(
+    (name: string) =>
+      updateActiveMode((mode) => {
+        // Tapping a single habit while "all" narrows the overlay to just it;
+        // otherwise toggle it in the explicit list.
+        if (mode.habits === 'all') return { ...mode, habits: [name] };
+        return {
+          ...mode,
+          habits: mode.habits.includes(name)
+            ? mode.habits.filter((k) => k !== name)
+            : [...mode.habits, name],
+        };
+      }),
+    [updateActiveMode],
   );
-  const toggleShowCover = useCallback(
-    () => updatePrefs((prev) => ({ ...prev, showCover: !prev.showCover })),
-    [updatePrefs],
+
+  const [refreshing, setRefreshing] = useState(false);
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      // Refetch every mounted month at once (each section owns its query).
+      await queryClient.invalidateQueries({ queryKey: ['journal', 'month'] });
+    } finally {
+      setRefreshing(false);
+    }
+  }, [queryClient]);
+
+  // Precomputed per-month heights let getItemLayout answer synchronously,
+  // which the initial contentOffset (jump straight to the current month)
+  // requires. Offsets include the chrome spacer (the list's header view
+  // that keeps content below the floating glass header at rest).
+  const itemLayouts = useMemo(() => {
+    let offset = FLOATING_CHROME_HEIGHT;
+    return months.map((m) => {
+      const length = monthSectionHeight(m.weeks.length, cellHeight);
+      const layout = { length, offset };
+      offset += length;
+      return layout;
+    });
+  }, [months, cellHeight]);
+  const getItemLayout = useCallback(
+    (_: ArrayLike<MonthItem> | null | undefined, index: number) => ({
+      index,
+      ...itemLayouts[index],
+    }),
+    [itemLayouts],
   );
 
-  const habitOverlayActive = prefs.habitOverlay.length > 0;
+  // FlatList requires the viewability pairs to keep the same identity across
+  // renders — a lazy useState initializer gives us that without touching a
+  // ref during render (setVisibleIndex is stable, so the closure stays valid).
+  const [viewabilityConfigCallbackPairs] = useState(() => [
+    {
+      viewabilityConfig: { itemVisiblePercentThreshold: 25 },
+      onViewableItemsChanged: ({ viewableItems }: { viewableItems: ViewToken[] }) => {
+        const first = viewableItems.find((v) => v.isViewable && typeof v.index === 'number');
+        if (first && first.index !== null) setVisibleIndex(first.index);
+      },
+    },
+  ]);
+
+  const renderMonth = useCallback(
+    ({ item }: { item: MonthItem }) => (
+      <MonthSection
+        year={item.year}
+        month={item.month}
+        weeks={item.weeks}
+        cellWidth={cellWidth}
+        cellHeight={cellHeight}
+        mode={viewMode}
+        todayKey={todayKey}
+        scheme={scheme}
+        enabled={envOk}
+        onDayPress={openDay}
+      />
+    ),
+    [cellWidth, cellHeight, viewMode, todayKey, scheme, envOk, openDay],
+  );
 
   return (
-    <ScreenContainer>
-      <ScrollView
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-        refreshControl={
-          envOk ? (
-            <RefreshControl
-              refreshing={entries.isRefetching}
-              onRefresh={() => {
-                entries.refetch();
-              }}
-              tintColor={theme.textSecondary}
-            />
-          ) : undefined
-        }>
-        <View style={styles.header}>
-          <View style={styles.headerSide}>
-            <Pressable onPress={prevMonth} accessibilityLabel="前の月" style={styles.navBtn}>
-              <ThemedText type="subtitle">‹</ThemedText>
-            </Pressable>
-          </View>
-          <Pressable onPress={goToday} accessibilityLabel="今日">
-            <ThemedText type="subtitle">
-              {view.year}年{view.month + 1}月
-            </ThemedText>
-          </Pressable>
-          <View style={[styles.headerSide, styles.headerSideRight]}>
-            <Pressable onPress={nextMonth} accessibilityLabel="次の月" style={styles.navBtn}>
-              <ThemedText type="subtitle">›</ThemedText>
-            </Pressable>
-            <Pressable
-              onPress={() => setShowFilters((v) => !v)}
-              accessibilityLabel="表示項目"
-              accessibilityState={{ expanded: showFilters }}
-              style={[
-                styles.actionBtn,
-                {
-                  backgroundColor: showFilters
-                    ? theme.backgroundSelected
-                    : theme.backgroundElement,
-                },
-              ]}>
-              <ThemedText style={styles.actionBtnIcon}>⋯</ThemedText>
-            </Pressable>
-          </View>
-        </View>
-
-        {showFilters && (
-          <View style={styles.habitRow}>
-            {habitNames.map((name) => {
-              const on = prefs.habitOverlay.includes(name);
-              const Icon = habitIcon(name);
-              const iconColor = on ? theme.text : theme.textSecondary;
-              return (
-                <Pressable
-                  key={name}
-                  accessibilityRole="switch"
-                  accessibilityLabel={`${name} をカレンダーに表示`}
-                  accessibilityState={{ checked: on }}
-                  onPress={() => toggleHabit(name)}
-                  style={[
-                    styles.chipToggle,
-                    {
-                      backgroundColor: on ? theme.backgroundSelected : theme.backgroundElement,
-                    },
-                  ]}>
-                  <Icon size={14} color={iconColor} strokeWidth={1.8} />
-                  <ThemedText type="small" themeColor={on ? 'text' : 'textSecondary'}>
-                    {name}
-                  </ThemedText>
-                </Pressable>
-              );
-            })}
-            <Pressable
-              accessibilityRole="switch"
-              accessibilityState={{ checked: prefs.showDiary }}
-              onPress={toggleShowDiary}
-              style={[
-                styles.chipToggle,
-                {
-                  backgroundColor: prefs.showDiary
-                    ? theme.backgroundSelected
-                    : theme.backgroundElement,
-                },
-              ]}>
-              <DIARY_TOGGLE_ICON
-                size={14}
-                color={prefs.showDiary ? theme.text : theme.textSecondary}
-                strokeWidth={1.8}
-              />
-              <ThemedText type="small" themeColor={prefs.showDiary ? 'text' : 'textSecondary'}>
-                Diary
-              </ThemedText>
-            </Pressable>
-            <Pressable
-              accessibilityRole="switch"
-              accessibilityState={{ checked: prefs.showCover }}
-              onPress={toggleShowCover}
-              style={[
-                styles.chipToggle,
-                {
-                  backgroundColor: prefs.showCover
-                    ? theme.backgroundSelected
-                    : theme.backgroundElement,
-                },
-              ]}>
-              <COVER_TOGGLE_ICON
-                size={14}
-                color={prefs.showCover ? theme.text : theme.textSecondary}
-                strokeWidth={1.8}
-              />
-              <ThemedText type="small" themeColor={prefs.showCover ? 'text' : 'textSecondary'}>
-                Cover
-              </ThemedText>
-            </Pressable>
-          </View>
-        )}
-
-        <View style={styles.weekdayRow}>
-          {WEEKDAY_LABELS.map((label, i) => (
-            <ThemedText
-              key={label}
-              type="small"
-              themeColor="textSecondary"
-              style={[
-                styles.weekdayLabel,
-                i === 0 && { color: HOLIDAY_COLOR },
-                i === 6 && { color: '#4477cc' },
-              ]}>
-              {label}
-            </ThemedText>
-          ))}
-        </View>
-
+    <ThemedView style={styles.root}>
+      <SafeAreaView style={styles.safeArea} edges={['top']}>
         <View
-          style={styles.grid}
+          style={styles.listContainer}
           onLayout={(e) => setGridWidth(e.nativeEvent.layout.width)}>
-          {cells.map((cell) => {
-            const entry = entryByDate.get(cell.dateKey);
-            const isToday = cell.dateKey === todayKey;
-            const dayOfWeek = cell.date.getDay();
-            const isHoliday = getJapaneseHoliday(cell.date) !== null;
-            const cover = prefs.showCover && entry?.coverUrl ? entry.coverUrl : null;
-            const diaryInCell =
-              prefs.showDiary && entry?.diary ? entry.diary.trim() : '';
+          {cellWidth > 0 && (
+            <FlatList
+              ref={listRef}
+              data={months}
+              keyExtractor={(m) => m.key}
+              renderItem={renderMonth}
+              getItemLayout={getItemLayout}
+              onLayout={initialScrollToToday}
+              viewabilityConfigCallbackPairs={viewabilityConfigCallbackPairs}
+              initialNumToRender={3}
+              maxToRenderPerBatch={3}
+              windowSize={7}
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={{ paddingBottom: BottomTabInset + Spacing.four }}
+              ListHeaderComponent={
+                // Rest position for content below the floating glass chrome;
+                // scrolling slides months underneath it.
+                <View>
+                  <View style={{ height: FLOATING_CHROME_HEIGHT }} />
+                  {!envOk && (
+                    <ThemedText
+                      type="small"
+                      themeColor="textSecondary"
+                      style={styles.statusText}>
+                      Notion 未接続
+                    </ThemedText>
+                  )}
+                </View>
+              }
+              refreshControl={
+                envOk ? (
+                  <RefreshControl
+                    refreshing={refreshing}
+                    onRefresh={onRefresh}
+                    progressViewOffset={FLOATING_CHROME_HEIGHT}
+                    tintColor={theme.textSecondary}
+                  />
+                ) : undefined
+              }
+            />
+          )}
+        </View>
 
-            const dateColor = cover
-              ? '#ffffff'
-              : isHoliday || dayOfWeek === 0
-              ? HOLIDAY_COLOR
-              : dayOfWeek === 6
-              ? '#4477cc'
-              : theme.text;
-
-            return (
-              <Pressable
-                key={cell.dateKey}
-                onPress={() => openDay(cell.dateKey)}
-                accessibilityRole="button"
-                accessibilityLabel={`${cell.date.getMonth() + 1}月${cell.date.getDate()}日`}
-                style={({ pressed }) => [
-                  styles.cell,
-                  { width: cellWidth, height: cellHeight },
-                  isToday && { backgroundColor: theme.backgroundSelected, borderRadius: 8 },
-                  pressed && { opacity: 0.6 },
+        {/* Floating chrome: ONE frosted band bleeding edge-to-edge from the
+            very top of the screen — a blur with a wash of the background
+            color over it, and a gradient skirt below so its lower edge
+            melts into the calendar instead of cutting it. */}
+        <View style={[styles.chromePanel, { paddingTop: insets.top + Spacing.one }]}>
+          <BlurView intensity={36} tint={scheme} style={StyleSheet.absoluteFill} />
+          <View
+            style={[
+              StyleSheet.absoluteFill,
+              { backgroundColor: `${theme.background}B3` },
+            ]}
+          />
+          <View style={styles.chromeHeaderRow}>
+            <ThemedText type="subtitle">
+              {visibleMonth.year}年{visibleMonth.month + 1}月
+            </ThemedText>
+            <View style={styles.headerActions}>
+              {visibleIndex !== currentMonthIndex && (
+                <GlassView
+                  glassEffectStyle="regular"
+                  isInteractive
+                  tintColor={theme.accentSoft}
+                  style={[styles.todayGlass, !glassOk && { backgroundColor: theme.accentSoft }]}>
+                  <Pressable
+                    onPress={scrollToToday}
+                    accessibilityRole="button"
+                    accessibilityLabel="今日へ移動"
+                    style={styles.glassBtnInner}>
+                    <ThemedText type="smallBold" style={{ color: theme.accent }}>
+                      今日
+                    </ThemedText>
+                  </Pressable>
+                </GlassView>
+              )}
+              <GlassView
+                glassEffectStyle="regular"
+                isInteractive
+                style={[
+                  styles.actionGlass,
+                  !glassOk && { backgroundColor: theme.backgroundElement },
                 ]}>
-                {cover && (
-                  <>
-                    <Image source={{ uri: cover }} style={styles.coverImage} />
-                    <View style={styles.coverDim} />
-                  </>
+                <Pressable
+                  onPress={() => router.push('/journal-list')}
+                  accessibilityRole="button"
+                  accessibilityLabel="日記の一覧"
+                  style={styles.glassBtnInner}>
+                  <LayoutList size={16} color={theme.textSecondary} strokeWidth={1.8} />
+                </Pressable>
+              </GlassView>
+              <GlassView
+                glassEffectStyle="regular"
+                isInteractive
+                style={[
+                  styles.actionGlass,
+                  !glassOk && { backgroundColor: theme.backgroundElement },
+                ]}>
+                <Pressable
+                  onPress={openModeSheet}
+                  accessibilityRole="button"
+                  accessibilityLabel="表示モードを切り替え"
+                  style={styles.glassBtnInner}>
+                  <SlidersHorizontal size={16} color={theme.textSecondary} strokeWidth={1.8} />
+                </Pressable>
+              </GlassView>
+              <GlassView
+                glassEffectStyle="regular"
+                isInteractive
+                style={[
+                  styles.actionGlass,
+                  !glassOk && { backgroundColor: theme.backgroundElement },
+                ]}>
+                <Pressable
+                  onPress={onRefresh}
+                  disabled={refreshing}
+                  accessibilityRole="button"
+                  accessibilityLabel="最新のデータに更新"
+                  style={styles.glassBtnInner}>
+                  {refreshing ? (
+                    <ActivityIndicator size="small" color={theme.textSecondary} />
+                  ) : (
+                    <RotateCw size={16} color={theme.textSecondary} strokeWidth={1.8} />
+                  )}
+                </Pressable>
+              </GlassView>
+            </View>
+          </View>
+          <View style={styles.chromeWeekdayRow}>
+            {WEEKDAY_LABELS.map((label, i) => (
+              <ThemedText
+                key={label}
+                type="small"
+                themeColor="textSecondary"
+                style={[
+                  styles.weekdayLabel,
+                  i === 0 && { color: theme.holiday },
+                  i === 6 && { color: theme.saturday },
+                ]}>
+                {label}
+              </ThemedText>
+            ))}
+          </View>
+        </View>
+
+        {/* Floating pen — the diary tab's quick-capture entry point. The
+            calendar snaps to today first so the sheet opens over the day
+            it is about to write to. */}
+        <Pressable
+          onPress={() => {
+            scrollToToday();
+            setCaptureOpen(true);
+          }}
+          accessibilityRole="button"
+          accessibilityLabel="きろくを書く"
+          style={({ pressed }) => [
+            styles.fab,
+            { bottom: insets.bottom + Spacing.two, opacity: pressed ? 0.85 : 1 },
+          ]}>
+          <GlassView
+            glassEffectStyle="regular"
+            isInteractive
+            style={[styles.fabGlass, !glassOk && { backgroundColor: theme.accent }]}>
+            <PenLine size={24} color={glassOk ? theme.accent : '#ffffff'} strokeWidth={2} />
+          </GlassView>
+        </Pressable>
+      </SafeAreaView>
+
+
+      {/* View-mode sheet: switching a mode applies immediately, so the
+          calendar behind the sheet live-previews the change. */}
+      <Modal
+        visible={modeSheetOpen}
+        transparent
+        animationType="none"
+        onRequestClose={closeModeSheet}>
+        <KeyboardAvoidingView
+          style={styles.sheetFlex}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+          <View style={styles.sheetFlexEnd}>
+            <Animated.View style={[styles.sheetBackdrop, { opacity: sheetAnim }]}>
+              <Pressable
+                style={styles.sheetFlex}
+                accessibilityLabel="表示モードの設定を閉じる"
+                onPress={closeModeSheet}
+              />
+            </Animated.View>
+            <Animated.View
+              style={{
+                transform: [
+                  {
+                    translateY: sheetAnim.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [360, 0],
+                    }),
+                  },
+                ],
+              }}>
+            <View style={[styles.sheet, { backgroundColor: theme.background }]}>
+              <ThemedText type="smallBold" themeColor="textSecondary">
+                カレンダーの表示モード
+              </ThemedText>
+
+              <View style={styles.modeChipRow}>
+                {prefs.modes.map((m, i) => {
+                  const selected = i === prefs.activeMode;
+                  return (
+                    <Pressable
+                      key={i}
+                      onPress={() => setActiveMode(i)}
+                      accessibilityRole="button"
+                      accessibilityState={{ selected }}
+                      style={[
+                        styles.modeChip,
+                        {
+                          backgroundColor: selected
+                            ? theme.accentSoft
+                            : theme.backgroundElement,
+                        },
+                      ]}>
+                      <ThemedText
+                        type="smallBold"
+                        style={{ color: selected ? theme.accent : theme.textSecondary }}>
+                        {m.label}
+                      </ThemedText>
+                    </Pressable>
+                  );
+                })}
+                {prefs.modes.length < MAX_MODES && (
+                  <Pressable
+                    onPress={() => updatePrefs(addMode)}
+                    accessibilityRole="button"
+                    accessibilityLabel="表示モードを追加"
+                    style={[styles.modeChip, { backgroundColor: theme.backgroundElement }]}>
+                    <ThemedText type="smallBold" themeColor="textSecondary">
+                      ＋
+                    </ThemedText>
+                  </Pressable>
                 )}
+              </View>
+
+            <View style={styles.settingRow}>
+              <ThemedText type="small" themeColor="textSecondary">
+                モード名
+              </ThemedText>
+              <TextInput
+                value={viewMode.label}
+                onChangeText={(text) =>
+                  updatePrefs((prev) => renameMode(prev, prev.activeMode, text))
+                }
+                placeholder="モード名"
+                placeholderTextColor={theme.textSecondary}
+                style={[
+                  styles.modeNameInput,
+                  { color: theme.text, backgroundColor: theme.backgroundElement },
+                ]}
+              />
+            </View>
+
+            <ThemedText type="small" themeColor="textSecondary">
+              このモードで表示するもの
+            </ThemedText>
+
+            <View style={styles.settingRow}>
+              <View style={styles.settingLabel}>
+                <COVER_TOGGLE_ICON size={16} color={theme.textSecondary} strokeWidth={1.8} />
+                <ThemedText>写真</ThemedText>
+              </View>
+              <Switch
+                value={viewMode.showCover}
+                onValueChange={(v) => updateActiveMode((m) => ({ ...m, showCover: v }))}
+                trackColor={{ true: theme.accent }}
+              />
+            </View>
+            <View style={styles.settingRow}>
+              <View style={styles.settingLabel}>
+                <DIARY_TOGGLE_ICON size={16} color={theme.textSecondary} strokeWidth={1.8} />
+                <ThemedText>日記テキスト</ThemedText>
+              </View>
+              <Switch
+                value={viewMode.showDiary}
+                onValueChange={(v) => updateActiveMode((m) => ({ ...m, showDiary: v }))}
+                trackColor={{ true: theme.accent }}
+              />
+            </View>
+            <View style={styles.settingRow}>
+              <View style={styles.settingLabel}>
+                <ThemedText>気分</ThemedText>
+              </View>
+              <Switch
+                value={viewMode.showMark}
+                onValueChange={(v) => updateActiveMode((m) => ({ ...m, showMark: v }))}
+                trackColor={{ true: theme.accent }}
+              />
+            </View>
+
+            <View style={styles.settingRow}>
+              <View style={styles.settingLabel}>
+                <ThemedText>習慣</ThemedText>
+              </View>
+            </View>
+            <View style={styles.habitChipRow}>
+              <Pressable
+                onPress={() =>
+                  updateActiveMode((m) => ({ ...m, habits: m.habits === 'all' ? [] : 'all' }))
+                }
+                accessibilityRole="switch"
+                accessibilityState={{ checked: viewMode.habits === 'all' }}
+                style={[
+                  styles.chipToggle,
+                  {
+                    backgroundColor:
+                      viewMode.habits === 'all' ? theme.accentSoft : theme.backgroundElement,
+                  },
+                ]}>
                 <ThemedText
                   type="small"
-                  style={[
-                    styles.dateNumber,
-                    cover && styles.dateNumberOverCover,
-                    {
-                      opacity: cell.inMonth ? 1 : 0.25,
-                      color: dateColor,
-                    },
-                  ]}>
-                  {cell.date.getDate()}
+                  style={{
+                    color: viewMode.habits === 'all' ? theme.accent : theme.textSecondary,
+                  }}>
+                  すべて
                 </ThemedText>
-                <CellMark
-                  entry={entry ?? null}
-                  habitOverlay={prefs.habitOverlay}
-                  habitOverlayActive={habitOverlayActive}
-                  scheme={scheme}
-                  overCover={Boolean(cover)}
-                />
-                {diaryInCell.length > 0 && (
-                  <ThemedText
-                    type="small"
-                    numberOfLines={CELL_DIARY_LINES}
-                    ellipsizeMode="tail"
-                    style={[
-                      styles.cellDiary,
-                      cover ? styles.cellDiaryOverCover : { color: theme.textSecondary },
-                    ]}>
-                    {diaryInCell}
-                  </ThemedText>
-                )}
               </Pressable>
-            );
-          })}
-        </View>
-
-        {(!envOk || entries.isLoading || entries.error) && (
-          <View style={styles.statusRow}>
-            {!envOk && (
-              <ThemedText type="small" themeColor="textSecondary">
-                Notion 未接続
-              </ThemedText>
-            )}
-            {entries.isLoading && (
-              <View style={styles.statusInline}>
-                <ActivityIndicator size="small" color={theme.textSecondary} />
-                <ThemedText type="small" themeColor="textSecondary">
-                  {yearMonth} を読み込み中…
-                </ThemedText>
-              </View>
-            )}
-            {entries.error && (
-              <ThemedText type="small" style={{ color: '#cc4444' }}>
-                読み込み失敗: {entries.error.message}
-              </ThemedText>
-            )}
-          </View>
-        )}
-
-        {diaryList.length > 0 && (
-          <View style={styles.listSection}>
-            <ThemedText type="smallBold" themeColor="textSecondary" style={styles.listHeader}>
-              {view.month + 1}月の Diary
-            </ThemedText>
-            {diaryList.map((entry) => {
-              const chip = entry.feeling
-                ? notionChipColor(entry.feelingColor, scheme)
-                : null;
-              const [yyyy, mm, dd] = entry.date.split('-');
-              const dateObj = new Date(Number(yyyy), Number(mm) - 1, Number(dd));
-              const weekday = WEEKDAY_LABELS[dateObj.getDay()];
-              const diary = entry.diary ?? '';
-              return (
-                <Pressable
-                  key={entry.pageId}
-                  onPress={() => openDay(entry.date)}
-                  accessibilityRole="button"
-                  accessibilityLabel={`${Number(mm)}月${Number(dd)}日 のジャーナルを開く`}
-                  style={({ pressed }) => [
-                    styles.listItem,
-                    { borderBottomColor: theme.backgroundElement },
-                    pressed && { opacity: 0.6 },
-                  ]}>
-                  <View style={styles.listDateColumn}>
-                    <ThemedText type="smallBold">
-                      {Number(mm)}/{Number(dd)} ({weekday})
+              {habitNames.map((name) => {
+                const on = viewMode.habits === 'all' || viewMode.habits.includes(name);
+                const Icon = habitIcon(name);
+                const chipColor = on ? theme.accent : theme.textSecondary;
+                return (
+                  <Pressable
+                    key={name}
+                    accessibilityRole="switch"
+                    accessibilityLabel={`${name} をカレンダーに表示`}
+                    accessibilityState={{ checked: on }}
+                    onPress={() => toggleHabitInMode(name)}
+                    style={[
+                      styles.chipToggle,
+                      { backgroundColor: on ? theme.accentSoft : theme.backgroundElement },
+                    ]}>
+                    <Icon size={14} color={chipColor} strokeWidth={1.8} />
+                    <ThemedText type="small" style={{ color: chipColor }}>
+                      {name}
                     </ThemedText>
-                    {chip && entry.feeling ? (
-                      <View
-                        style={[styles.listChip, { backgroundColor: chip.background }]}>
-                        <ThemedText
-                          style={[styles.chipText, { color: chip.text }]}
-                          numberOfLines={1}>
-                          {entry.feeling}
-                        </ThemedText>
-                      </View>
-                    ) : null}
-                  </View>
-                  <ThemedText type="small" style={styles.listDiary}>
-                    {diary}
-                  </ThemedText>
-                </Pressable>
-              );
-            })}
+                  </Pressable>
+                );
+              })}
+            </View>
+
+            {prefs.modes.length > 1 && (
+              <Pressable
+                onPress={() => updatePrefs((prev) => removeMode(prev, prev.activeMode))}
+                accessibilityRole="button"
+                style={styles.deleteModeBtn}>
+                <ThemedText type="small" style={{ color: theme.danger }}>
+                  このモードを削除
+                </ThemedText>
+              </Pressable>
+            )}
+            </View>
+            </Animated.View>
           </View>
-        )}
-      </ScrollView>
-      <DayDrawer
-        date={drawerDate}
-        onClose={closeDrawer}
+        </KeyboardAvoidingView>
+      </Modal>
+
+      <CaptureSheet
+        visible={captureOpen}
+        onClose={() => setCaptureOpen(false)}
         feelingColors={feelingColorMap}
       />
-    </ScreenContainer>
+      <DayDrawer date={drawerDate} onClose={closeDrawer} feelingColors={feelingColorMap} />
+    </ThemedView>
   );
-}
-
-type CellMarkProps = {
-  entry: MonthEntry | null;
-  habitOverlay: string[];
-  habitOverlayActive: boolean;
-  scheme: 'light' | 'dark';
-  overCover: boolean;
-};
-
-function CellMark({ entry, habitOverlay, habitOverlayActive, scheme, overCover }: CellMarkProps) {
-  if (habitOverlayActive) {
-    const activeHabits = entry
-      ? habitOverlay.filter((k) => entry.habits?.[k])
-      : [];
-    if (activeHabits.length === 0) {
-      return null;
-    }
-    const iconColor = overCover ? '#ffffff' : scheme === 'dark' ? '#dddddd' : '#333333';
-    return (
-      <View style={styles.habitIconRow}>
-        {activeHabits.map((k) => {
-          const Icon = habitIcon(k);
-          return <Icon key={k} size={12} color={iconColor} strokeWidth={2} />;
-        })}
-      </View>
-    );
-  }
-
-  if (entry?.icon?.type === 'emoji') {
-    return (
-      <ThemedText style={styles.icon} numberOfLines={1}>
-        {entry.icon.emoji}
-      </ThemedText>
-    );
-  }
-  if (entry?.icon?.type === 'external') {
-    return <Image source={{ uri: entry.icon.url }} style={styles.iconImage} />;
-  }
-  if (entry?.feeling && !overCover) {
-    const chip = notionChipColor(entry.feelingColor, scheme);
-    return (
-      <View style={[styles.chip, { backgroundColor: chip.background }]}>
-        <ThemedText
-          style={[styles.chipText, { color: chip.text }]}
-          numberOfLines={1}>
-          {entry.feeling}
-        </ThemedText>
-      </View>
-    );
-  }
-  return null;
 }
 
 const styles = StyleSheet.create({
-  scrollContent: {
-    paddingVertical: Spacing.four,
-    gap: Spacing.two,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: Spacing.two,
-    gap: Spacing.two,
-  },
-  headerSide: {
+  root: {
     flex: 1,
+  },
+  safeArea: {
+    flex: 1,
+    // Slimmer than ScreenContainer's default so calendar cells get the width.
+    paddingHorizontal: Spacing.two,
+  },
+  chromePanel: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    paddingHorizontal: Spacing.three,
+    paddingBottom: Spacing.two,
+    gap: Spacing.one,
+  },
+  chromeHeaderRow: {
+    height: HEADER_BAR_HEIGHT,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  chromeWeekdayRow: {
+    // Bleed back out so the labels line up with the calendar columns below
+    // (grid sits at Spacing.two from the screen edge; panel pads three).
+    marginHorizontal: -(Spacing.three - Spacing.two),
+    height: WEEKDAY_STRIP_HEIGHT,
     flexDirection: 'row',
     alignItems: 'center',
   },
-  headerSideRight: {
-    justifyContent: 'flex-end',
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: Spacing.two,
   },
-  navBtn: {
-    paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.one,
+  todayGlass: {
+    height: 32,
+    borderRadius: 16,
   },
-  actionBtn: {
+  actionGlass: {
     width: 32,
     height: 32,
     borderRadius: 16,
+  },
+  glassBtnInner: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: Spacing.two + 2,
+  },
+  fab: {
+    position: 'absolute',
+    right: Spacing.four,
+  },
+  fabGlass: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  actionBtnIcon: {
-    fontSize: 18,
-    fontWeight: '700',
-    lineHeight: 20,
+  statusText: {
+    textAlign: 'center',
+    paddingVertical: Spacing.two,
   },
-  habitRow: {
+  sheetFlex: {
+    flex: 1,
+  },
+  sheetFlexEnd: {
+    flex: 1,
+    justifyContent: 'flex-end',
+  },
+  sheetBackdrop: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.35)',
+  },
+  sheet: {
+    borderTopLeftRadius: Radius.xl,
+    borderTopRightRadius: Radius.xl,
+    padding: Spacing.four,
+    paddingBottom: Spacing.five,
+    gap: Spacing.three,
+  },
+  modeChipRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Spacing.two,
+  },
+  modeChip: {
+    alignItems: 'center',
+    paddingVertical: Spacing.two + 2,
+    paddingHorizontal: Spacing.three,
+    minWidth: 64,
+    borderRadius: Radius.lg,
+  },
+  modeNameInput: {
+    minWidth: 160,
+    paddingHorizontal: Spacing.three,
+    paddingVertical: Spacing.one + 2,
+    borderRadius: Radius.md,
+    fontSize: 15,
+  },
+  deleteModeBtn: {
+    alignSelf: 'center',
+    paddingVertical: Spacing.one,
+    paddingHorizontal: Spacing.three,
+  },
+  settingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  settingLabel: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.two,
+  },
+  habitChipRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: Spacing.one,
-    paddingHorizontal: Spacing.two,
   },
   chipToggle: {
     flexDirection: 'row',
@@ -571,133 +858,12 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.one,
     borderRadius: Spacing.four,
   },
-  chipToggleIcon: {
-    fontSize: 14,
-  },
-  weekdayRow: {
-    flexDirection: 'row',
-  },
   weekdayLabel: {
     flex: 1,
     textAlign: 'center',
     fontWeight: '600',
   },
-  grid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-  },
-  cell: {
-    alignItems: 'center',
-    justifyContent: 'flex-start',
-    paddingTop: Spacing.one,
-    gap: 2,
-    overflow: 'hidden',
-    position: 'relative',
-  },
-  coverImage: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    resizeMode: 'cover',
-  },
-  coverDim: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(0,0,0,0.12)',
-  },
-  dateNumber: {
-    zIndex: 1,
-  },
-  dateNumberOverCover: {
-    textShadowColor: 'rgba(0,0,0,0.8)',
-    textShadowRadius: 2,
-    fontWeight: '700',
-  },
-  icon: {
-    fontSize: 16,
-    lineHeight: 18,
-  },
-  iconImage: {
-    width: 16,
-    height: 16,
-    borderRadius: 3,
-  },
-  habitIconRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: 2,
-    maxWidth: '100%',
-    zIndex: 1,
-  },
-  habitIcon: {
-    fontSize: 11,
-    lineHeight: 14,
-  },
-  chip: {
-    paddingHorizontal: 4,
-    paddingVertical: 1,
-    borderRadius: 4,
-    maxWidth: '96%',
-  },
-  chipText: {
-    fontSize: 10,
-    lineHeight: 12,
-    fontWeight: '600',
-  },
-  cellDiary: {
-    fontSize: 9,
-    lineHeight: 11,
-    paddingHorizontal: 3,
-    textAlign: 'left',
-    alignSelf: 'stretch',
-    zIndex: 1,
-  },
-  cellDiaryOverCover: {
-    color: '#ffffff',
-    textShadowColor: 'rgba(0,0,0,0.9)',
-    textShadowRadius: 2,
-  },
-  statusRow: {
-    paddingHorizontal: Spacing.two,
-  },
-  statusInline: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.one,
-  },
-  listSection: {
-    paddingHorizontal: Spacing.two,
-    gap: Spacing.two,
-  },
-  listHeader: {
-    marginTop: 0,
-  },
-  listItem: {
-    flexDirection: 'row',
-    gap: Spacing.three,
-    paddingVertical: Spacing.two,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
-  listDateColumn: {
-    width: 64,
-    alignItems: 'flex-start',
-    gap: 2,
-  },
-  listChip: {
-    paddingHorizontal: 4,
-    paddingVertical: 1,
-    borderRadius: 4,
-  },
-  listDiary: {
+  listContainer: {
     flex: 1,
-    flexShrink: 1,
-    flexBasis: 0,
   },
 });
