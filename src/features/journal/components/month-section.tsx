@@ -184,10 +184,11 @@ function DayCell({
               {cell.date.getDate()}
             </ThemedText>
           </View>
-          {/* Feeling: a small dot beside the date, vertically centered,
-              in the same tint Notion paints the select tag with. */}
+          {/* Feeling: a small dot beside the date, vertically centered.
+              The saturated (text) end of the Notion palette — the pale tag
+              tint disappears at dot size. */}
           {feelingChip && (
-            <View style={[styles.feelingDot, { backgroundColor: feelingChip.background }]} />
+            <View style={[styles.feelingDot, { backgroundColor: feelingChip.text }]} />
           )}
         </View>
         <CellMark entry={entry} mode={mode} scheme={scheme} overCover={Boolean(cover)} />
@@ -292,7 +293,7 @@ const styles = StyleSheet.create({
     marginTop: -2,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 2,
+    gap: 1,
   },
   dateBadge: {
     minWidth: 18,
