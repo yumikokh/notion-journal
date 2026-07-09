@@ -217,6 +217,7 @@ type CellMarkProps = {
 };
 
 function CellMark({ entry, mode, scheme, overCover }: CellMarkProps) {
+  const theme = useTheme();
   const habitsActive = mode.habits === 'all' || mode.habits.length > 0;
   if (habitsActive) {
     const checked = entry
@@ -227,7 +228,7 @@ function CellMark({ entry, mode, scheme, overCover }: CellMarkProps) {
     if (activeHabits.length === 0) {
       return null;
     }
-    const iconColor = overCover ? '#ffffff' : scheme === 'dark' ? '#dddddd' : '#333333';
+    const iconColor = overCover ? '#ffffff' : theme.accent;
     return (
       <View style={styles.habitIconRow}>
         {activeHabits.map((k) => {
