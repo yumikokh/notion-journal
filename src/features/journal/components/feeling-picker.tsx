@@ -1,12 +1,7 @@
-import { useEffect, useRef, useState } from 'react';
-import {
-  PanResponder,
-  Pressable,
-  StyleSheet,
-  View,
-  useColorScheme,
-  type PanResponderInstance,
-} from 'react-native';
+import { Host, Slider } from '@expo/ui/swift-ui';
+import { tint } from '@expo/ui/swift-ui/modifiers';
+import { useRef, useState } from 'react';
+import { Pressable, StyleSheet, View, useColorScheme } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
 import { Radius, Spacing } from '@/constants/theme';
@@ -25,110 +20,72 @@ type FeelingPickerProps = {
   colorMap?: Partial<Record<Feeling, NotionSelectColor | null>>;
 };
 
-const TRACK_PAD = Spacing.three;
-const STOP_W = 24;
-
 /**
- * Mood gauge: FEELINGS is an ordered scale (best → worst), so it renders
- * as a compact track of five tinted dots instead of five large kaomoji
- * buttons. Tap a dot or drag along the track like a slider — while
- * dragging, the nearest dot previews live and the value commits on
- * release. The selected dot grows to full color and its kaomoji shows as
- * a chip on the right; tapping the selected dot again clears the feeling.
+ * Mood slider: FEELINGS is an ordered scale (best → worst), rendered as
+ * the system SwiftUI Slider — the genuine liquid-glass control on iOS 26 —
+ * with 5 stops. While dragging, the nearest feeling previews in the value
+ * chip; the value commits when the finger lifts (onEditingChanged false).
+ * Tapping the value chip clears the feeling.
  */
 export function FeelingPicker({ value, onChange, colorMap }: FeelingPickerProps) {
   const theme = useTheme();
   const scheme = useColorScheme() === 'dark' ? 'dark' : 'light';
 
-  // Drag preview: which dot the finger is over, before commit-on-release.
   const [preview, setPreview] = useState<Feeling | null>(null);
-  const [trackW, setTrackW] = useState(0);
-
-  // Pan handlers are created once; they read the latest layout/props via a
-  // ref (updated in an effect — writing refs during render is unsafe).
-  const live = useRef({ trackW: 0, onChange });
-  useEffect(() => {
-    live.current = { trackW, onChange };
-  }, [trackW, onChange]);
-
-  // Created inside an effect (not render) so the callbacks' ref reads are
-  // legal for react-hooks/refs; they only ever run from touch events.
-  const [pan, setPan] = useState<PanResponderInstance | null>(null);
-  useEffect(() => {
-    const feelingAtX = (x: number): Feeling => {
-      const usable = live.current.trackW - TRACK_PAD * 2 - STOP_W;
-      const step = usable > 0 ? usable / (FEELINGS.length - 1) : 1;
-      const raw = Math.round((x - TRACK_PAD - STOP_W / 2) / step);
-      const idx = Math.min(FEELINGS.length - 1, Math.max(0, raw));
-      return FEELINGS[idx];
-    };
-    setPan(
-      PanResponder.create({
-        // Capture only real horizontal drags so plain taps still reach the dots.
-        onMoveShouldSetPanResponderCapture: (_e, g) => Math.abs(g.dx) > 6,
-        onPanResponderMove: (e) => setPreview(feelingAtX(e.nativeEvent.locationX)),
-        onPanResponderRelease: (e) => {
-          live.current.onChange(feelingAtX(e.nativeEvent.locationX));
-          setPreview(null);
-        },
-        onPanResponderTerminate: () => setPreview(null),
-      }),
-    );
-  }, []);
+  const previewRef = useRef<Feeling | null>(null);
 
   const shown = preview ?? value;
-  const selectedChip = shown
+  const chip = shown
     ? notionChipColor(colorMap?.[shown] ?? FEELING_NOTION_COLORS[shown], scheme)
     : null;
+  // With nothing selected the thumb parks in the middle; the chip carries
+  // the "unset" state, not the slider position.
+  const sliderValue = FEELINGS.indexOf(shown ?? FEELINGS[2]);
 
   return (
     <View style={styles.row}>
-      <View
-        style={[styles.track, { backgroundColor: theme.backgroundElement }]}
-        onLayout={(e) => setTrackW(e.nativeEvent.layout.width)}
-        {...(pan?.panHandlers ?? {})}>
-        <View style={[styles.trackLine, { backgroundColor: theme.backgroundSelected }]} />
-        {FEELINGS.map((feeling) => {
-          const selected = shown === feeling;
-          const chip = notionChipColor(
-            colorMap?.[feeling] ?? FEELING_NOTION_COLORS[feeling],
-            scheme,
-          );
-          return (
-            <Pressable
-              key={feeling}
-              accessibilityRole="button"
-              accessibilityLabel={`Feeling ${feeling}`}
-              accessibilityState={{ selected }}
-              hitSlop={10}
-              onPress={() => onChange(value === feeling ? null : feeling)}
-              style={styles.stop}>
-              <View
-                style={[
-                  selected ? styles.dotSelected : styles.dot,
-                  { backgroundColor: chip.background },
-                  !selected && styles.dotIdle,
-                ]}
-              />
-            </Pressable>
-          );
-        })}
-      </View>
-      <View
+      {/* SwiftUI views only lay out inside a Host, which carries the RN size. */}
+      <Host style={styles.sliderWrap}>
+        <Slider
+          min={0}
+          max={FEELINGS.length - 1}
+          step={1}
+          value={sliderValue}
+          modifiers={[tint(chip ? chip.text : theme.accent)]}
+          onValueChange={(v) => {
+            const idx = Math.min(FEELINGS.length - 1, Math.max(0, Math.round(v)));
+            previewRef.current = FEELINGS[idx];
+            setPreview(FEELINGS[idx]);
+          }}
+          onEditingChanged={(editing) => {
+            if (editing) return;
+            const next = previewRef.current;
+            previewRef.current = null;
+            setPreview(null);
+            if (next) onChange(next);
+          }}
+        />
+      </Host>
+      <Pressable
+        onPress={() => {
+          if (value) onChange(null);
+        }}
+        accessibilityRole="button"
+        accessibilityLabel={value ? '気分をクリア' : '気分'}
         style={[
           styles.valueChip,
-          { backgroundColor: selectedChip ? selectedChip.background : theme.backgroundElement },
+          { backgroundColor: chip ? chip.background : theme.backgroundElement },
         ]}>
         <ThemedText
           type="small"
           style={{
-            color: selectedChip ? selectedChip.text : theme.textSecondary,
+            color: chip ? chip.text : theme.textSecondary,
             fontWeight: '600',
           }}
           numberOfLines={1}>
           {shown ?? '気分'}
         </ThemedText>
-      </View>
+      </Pressable>
     </View>
   );
 }
@@ -139,40 +96,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: Spacing.two,
   },
-  track: {
+  sliderWrap: {
     flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
     height: 32,
-    borderRadius: 16,
-    paddingHorizontal: TRACK_PAD,
-  },
-  trackLine: {
-    position: 'absolute',
-    left: TRACK_PAD + 4,
-    right: TRACK_PAD + 4,
-    height: 2,
-    borderRadius: 1,
-  },
-  stop: {
-    alignItems: 'center',
     justifyContent: 'center',
-    width: STOP_W,
-    height: 32,
-  },
-  dot: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-  },
-  dotIdle: {
-    opacity: 0.55,
-  },
-  dotSelected: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
   },
   valueChip: {
     minWidth: 64,

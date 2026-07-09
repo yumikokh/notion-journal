@@ -98,7 +98,11 @@ export function DayDrawer({ date, onClose, feelingColors }: DayDrawerProps) {
   );
 }
 
-function DayDrawerContent({
+/**
+ * The drawer's inner editor, exported so the きろく sheet can morph into
+ * it when pulled up to full height (same content, no second modal).
+ */
+export function DayDrawerContent({
   date,
   onClose,
   feelingColors,

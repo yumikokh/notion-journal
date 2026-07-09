@@ -49,6 +49,7 @@ import {
   habitIcon,
 } from '@/features/journal/habit-icons';
 import { useMonthEntries } from '@/features/journal/use-month-entries';
+import { CaptureSheet } from '@/features/today/components/capture-sheet';
 import { useTheme } from '@/hooks/use-theme';
 import { toDateKey } from '@/lib/date';
 import { isSupabaseEnvConfigured } from '@/lib/env';
@@ -139,6 +140,7 @@ export function CalendarScreen() {
   const viewMode = activeViewMode(prefs);
 
   const [drawerDate, setDrawerDate] = useState<string | null>(null);
+  const [captureOpen, setCaptureOpen] = useState(false);
 
   const insets = useSafeAreaInsets();
 
@@ -383,17 +385,15 @@ export function CalendarScreen() {
           )}
         </View>
 
-        {/* Floating glass chrome: ONE panel holding the month title, the
-            action buttons and the weekday row, so nothing floats loose.
-            Absolute over the list so the calendar refracts through.
+        {/* Floating chrome: ONE flat panel (app background color) holding
+            the month title, the glass action buttons and the weekday row.
+            The buttons carry the glass; the panel itself stays quiet.
             (Absolute children ignore the SafeAreaView padding, so the top
             inset is added manually.) */}
-        <GlassView
-          glassEffectStyle="regular"
+        <View
           style={[
             styles.chromePanel,
-            { top: insets.top + Spacing.two },
-            !glassOk && { backgroundColor: theme.background },
+            { top: insets.top + Spacing.two, backgroundColor: theme.background },
           ]}>
           <View style={styles.chromeHeaderRow}>
             <ThemedText type="subtitle">
@@ -401,42 +401,72 @@ export function CalendarScreen() {
             </ThemedText>
             <View style={styles.headerActions}>
               {visibleIndex !== currentMonthIndex && (
-                <Pressable
-                  onPress={scrollToToday}
-                  accessibilityRole="button"
-                  accessibilityLabel="今日へ移動"
-                  style={[styles.todayBtn, { backgroundColor: theme.accentSoft }]}>
-                  <ThemedText type="smallBold" style={{ color: theme.accent }}>
-                    今日
-                  </ThemedText>
-                </Pressable>
+                <GlassView
+                  glassEffectStyle="regular"
+                  isInteractive
+                  tintColor={theme.accentSoft}
+                  style={[styles.todayGlass, !glassOk && { backgroundColor: theme.accentSoft }]}>
+                  <Pressable
+                    onPress={scrollToToday}
+                    accessibilityRole="button"
+                    accessibilityLabel="今日へ移動"
+                    style={styles.glassBtnInner}>
+                    <ThemedText type="smallBold" style={{ color: theme.accent }}>
+                      今日
+                    </ThemedText>
+                  </Pressable>
+                </GlassView>
               )}
-              <Pressable
-                onPress={() => router.push('/journal-list')}
-                accessibilityRole="button"
-                accessibilityLabel="日記の一覧"
-                style={[styles.actionBtn, { backgroundColor: theme.backgroundElement }]}>
-                <LayoutList size={16} color={theme.textSecondary} strokeWidth={1.8} />
-              </Pressable>
-              <Pressable
-                onPress={openModeSheet}
-                accessibilityRole="button"
-                accessibilityLabel="表示モードを切り替え"
-                style={[styles.actionBtn, { backgroundColor: theme.backgroundElement }]}>
-                <SlidersHorizontal size={16} color={theme.textSecondary} strokeWidth={1.8} />
-              </Pressable>
-              <Pressable
-                onPress={onRefresh}
-                disabled={refreshing}
-                accessibilityRole="button"
-                accessibilityLabel="最新のデータに更新"
-                style={[styles.actionBtn, { backgroundColor: theme.backgroundElement }]}>
-                {refreshing ? (
-                  <ActivityIndicator size="small" color={theme.textSecondary} />
-                ) : (
-                  <RotateCw size={16} color={theme.textSecondary} strokeWidth={1.8} />
-                )}
-              </Pressable>
+              <GlassView
+                glassEffectStyle="regular"
+                isInteractive
+                style={[
+                  styles.actionGlass,
+                  !glassOk && { backgroundColor: theme.backgroundElement },
+                ]}>
+                <Pressable
+                  onPress={() => router.push('/journal-list')}
+                  accessibilityRole="button"
+                  accessibilityLabel="日記の一覧"
+                  style={styles.glassBtnInner}>
+                  <LayoutList size={16} color={theme.textSecondary} strokeWidth={1.8} />
+                </Pressable>
+              </GlassView>
+              <GlassView
+                glassEffectStyle="regular"
+                isInteractive
+                style={[
+                  styles.actionGlass,
+                  !glassOk && { backgroundColor: theme.backgroundElement },
+                ]}>
+                <Pressable
+                  onPress={openModeSheet}
+                  accessibilityRole="button"
+                  accessibilityLabel="表示モードを切り替え"
+                  style={styles.glassBtnInner}>
+                  <SlidersHorizontal size={16} color={theme.textSecondary} strokeWidth={1.8} />
+                </Pressable>
+              </GlassView>
+              <GlassView
+                glassEffectStyle="regular"
+                isInteractive
+                style={[
+                  styles.actionGlass,
+                  !glassOk && { backgroundColor: theme.backgroundElement },
+                ]}>
+                <Pressable
+                  onPress={onRefresh}
+                  disabled={refreshing}
+                  accessibilityRole="button"
+                  accessibilityLabel="最新のデータに更新"
+                  style={styles.glassBtnInner}>
+                  {refreshing ? (
+                    <ActivityIndicator size="small" color={theme.textSecondary} />
+                  ) : (
+                    <RotateCw size={16} color={theme.textSecondary} strokeWidth={1.8} />
+                  )}
+                </Pressable>
+              </GlassView>
             </View>
           </View>
           <View style={styles.chromeWeekdayRow}>
@@ -454,11 +484,16 @@ export function CalendarScreen() {
               </ThemedText>
             ))}
           </View>
-        </GlassView>
+        </View>
 
-        {/* Floating pen — the diary tab's quick-capture entry point. */}
+        {/* Floating pen — the diary tab's quick-capture entry point. The
+            calendar snaps to today first so the sheet opens over the day
+            it is about to write to. */}
         <Pressable
-          onPress={() => router.push('/capture-sheet')}
+          onPress={() => {
+            scrollToToday();
+            setCaptureOpen(true);
+          }}
           accessibilityRole="button"
           accessibilityLabel="きろくを書く"
           style={({ pressed }) => [
@@ -669,6 +704,11 @@ export function CalendarScreen() {
         </KeyboardAvoidingView>
       </Modal>
 
+      <CaptureSheet
+        visible={captureOpen}
+        onClose={() => setCaptureOpen(false)}
+        feelingColors={feelingColorMap}
+      />
       <DayDrawer date={drawerDate} onClose={closeDrawer} feelingColors={feelingColorMap} />
     </ThemedView>
   );
@@ -713,19 +753,20 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: Spacing.two,
   },
-  todayBtn: {
+  todayGlass: {
     height: 32,
-    paddingHorizontal: Spacing.three,
     borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
-  actionBtn: {
+  actionGlass: {
     width: 32,
     height: 32,
     borderRadius: 16,
+  },
+  glassBtnInner: {
+    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
+    paddingHorizontal: Spacing.two + 2,
   },
   fab: {
     position: 'absolute',

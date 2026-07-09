@@ -1,24 +1,29 @@
 import * as ImagePicker from 'expo-image-picker';
-import { useRouter } from 'expo-router';
 import { ArrowUp, Camera, Check, X } from 'lucide-react-native';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Animated,
   Keyboard,
+  KeyboardAvoidingView,
+  Modal,
+  PanResponder,
+  Platform,
   Pressable,
   StyleSheet,
   TextInput,
   View,
+  useWindowDimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
 import { Radius, Spacing } from '@/constants/theme';
 import {
   CoverCropModal,
   type CropSource,
 } from '@/features/journal/components/cover-crop-modal';
+import { DayDrawerContent } from '@/features/journal/components/day-drawer';
 import { FeelingPicker } from '@/features/journal/components/feeling-picker';
 import { HabitChecks } from '@/features/journal/components/habit-checks';
 import type { CropRect } from '@/features/journal/cover-crop';
@@ -43,17 +48,173 @@ const EMPTY_HABITS = {
   exercise: false,
 } as const;
 
+/** Composer height when the sheet is at rest (content only; insets added). */
+const COMPACT_CONTENT_HEIGHT = 330;
+
+type CaptureSheetProps = {
+  visible: boolean;
+  onClose: () => void;
+  feelingColors?: Partial<Record<Feeling, NotionSelectColor | null>>;
+};
+
 /**
- * The きろく composer — presented as a native bottom sheet (formSheet with
- * fitToContents) over whichever tab was active, so it reads as "jot and go"
- * rather than a destination screen. Only one-tap today-state inputs live
- * here (feeling, habits, cover shortcut) around the timestamped quick-log
- * input, which focuses on open. Anything deeper (DIARY, body, AI) is the
- * day drawer's job.
+ * The きろく sheet — a custom JS bottom sheet over the calendar. At rest it
+ * is the minimal composer (feeling / habits / cover shortcut / quick log).
+ * Dragging the grabber up morphs the SAME sheet into today's full day
+ * editor (DayDrawerContent): the container springs to full height while
+ * the contents cross-fade, so the transition reads as one surface growing
+ * — not two modals swapping. Built in JS because the native formSheet
+ * neither reports detent changes nor resizes its content per detent.
  */
-export function CaptureScreen() {
+export function CaptureSheet({ visible, onClose, feelingColors }: CaptureSheetProps) {
   const theme = useTheme();
-  const router = useRouter();
+  const insets = useSafeAreaInsets();
+  const { height: screenH } = useWindowDimensions();
+
+  const compactH = COMPACT_CONTENT_HEIGHT + Math.max(insets.bottom, Spacing.three);
+  const fullH = screenH - insets.top - Spacing.two;
+
+  const [expanded, setExpanded] = useState(false);
+  const [heightAnim] = useState(() => new Animated.Value(compactH));
+  const [backdropAnim] = useState(() => new Animated.Value(0));
+  const [composerFade] = useState(() => new Animated.Value(1));
+  const [drawerFade] = useState(() => new Animated.Value(0));
+
+  // Reset to composer state every time the sheet opens (onShow is an event
+  // handler, so the state writes are legal there).
+  const handleShow = useCallback(() => {
+    setExpanded(false);
+    heightAnim.setValue(compactH);
+    composerFade.setValue(1);
+    drawerFade.setValue(0);
+    Animated.timing(backdropAnim, { toValue: 1, duration: 180, useNativeDriver: true }).start();
+  }, [compactH, heightAnim, composerFade, drawerFade, backdropAnim]);
+
+  const close = useCallback(() => {
+    Keyboard.dismiss();
+    Animated.timing(backdropAnim, { toValue: 0, duration: 150, useNativeDriver: true }).start();
+    onClose();
+  }, [onClose, backdropAnim]);
+
+  const expand = useCallback(() => {
+    Keyboard.dismiss();
+    setExpanded(true);
+    Animated.parallel([
+      Animated.spring(heightAnim, {
+        toValue: fullH,
+        useNativeDriver: false,
+        friction: 10,
+        tension: 60,
+      }),
+      Animated.timing(composerFade, { toValue: 0, duration: 160, useNativeDriver: false }),
+      Animated.timing(drawerFade, { toValue: 1, duration: 220, useNativeDriver: false }),
+    ]).start();
+  }, [heightAnim, composerFade, drawerFade, fullH]);
+
+  const collapse = useCallback(() => {
+    setExpanded(false);
+    Animated.parallel([
+      Animated.spring(heightAnim, {
+        toValue: compactH,
+        useNativeDriver: false,
+        friction: 10,
+        tension: 60,
+      }),
+      Animated.timing(composerFade, { toValue: 1, duration: 220, useNativeDriver: false }),
+      Animated.timing(drawerFade, { toValue: 0, duration: 160, useNativeDriver: false }),
+    ]).start();
+  }, [heightAnim, composerFade, drawerFade, compactH]);
+
+  // Grabber drag: follow the finger, then snap to full / compact / closed.
+  const live = useRef({ expanded, compactH, fullH, expand, collapse, close, heightAnim });
+  useEffect(() => {
+    live.current = { expanded, compactH, fullH, expand, collapse, close, heightAnim };
+  }, [expanded, compactH, fullH, expand, collapse, close, heightAnim]);
+  const [pan, setPan] = useState<ReturnType<typeof PanResponder.create> | null>(null);
+  useEffect(() => {
+    setPan(
+      PanResponder.create({
+        onMoveShouldSetPanResponder: (_e, g) => Math.abs(g.dy) > 8,
+        onPanResponderMove: (_e, g) => {
+          const s = live.current;
+          const base = s.expanded ? s.fullH : s.compactH;
+          const next = Math.min(s.fullH, Math.max(120, base - g.dy));
+          s.heightAnim.setValue(next);
+        },
+        onPanResponderRelease: (_e, g) => {
+          const s = live.current;
+          const base = s.expanded ? s.fullH : s.compactH;
+          const current = base - g.dy;
+          if (!s.expanded && (g.dy > 90 || g.vy > 1.2)) {
+            s.close();
+          } else if (current > (s.compactH + s.fullH) / 2) {
+            s.expand();
+          } else {
+            s.collapse();
+          }
+        },
+      }),
+    );
+  }, []);
+
+  return (
+    <Modal
+      visible={visible}
+      transparent
+      animationType="slide"
+      onShow={handleShow}
+      onRequestClose={close}>
+      <View style={styles.flexEnd}>
+        <Animated.View style={[styles.backdrop, { opacity: backdropAnim }]}>
+          <Pressable style={styles.flex} accessibilityLabel="きろくを閉じる" onPress={close} />
+        </Animated.View>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          pointerEvents="box-none">
+          <Animated.View
+            style={[styles.sheet, { height: heightAnim, backgroundColor: theme.background }]}>
+            <View style={styles.grabberZone} {...(pan?.panHandlers ?? {})}>
+              {/* Tap is the discoverable fallback for the drag gesture. */}
+              <Pressable
+                onPress={() => (expanded ? collapse() : expand())}
+                accessibilityRole="button"
+                accessibilityLabel={expanded ? 'コンパクトに戻す' : '今日の詳細をひらく'}
+                hitSlop={12}
+                style={styles.grabberPress}>
+                <View style={[styles.grabber, { backgroundColor: theme.backgroundSelected }]} />
+              </Pressable>
+            </View>
+            <Animated.View
+              pointerEvents={expanded ? 'none' : 'auto'}
+              style={[styles.layer, { opacity: composerFade }]}>
+              <Composer feelingColors={feelingColors} onRequestClose={close} />
+            </Animated.View>
+            <Animated.View
+              pointerEvents={expanded ? 'auto' : 'none'}
+              style={[styles.layer, { opacity: drawerFade }]}>
+              {expanded && (
+                <DayDrawerContent
+                  date={toDateKey(new Date())}
+                  onClose={close}
+                  feelingColors={feelingColors}
+                />
+              )}
+            </Animated.View>
+          </Animated.View>
+        </KeyboardAvoidingView>
+      </View>
+    </Modal>
+  );
+}
+
+function Composer({
+  feelingColors,
+  onRequestClose,
+}: {
+  feelingColors?: Partial<Record<Feeling, NotionSelectColor | null>>;
+  onRequestClose: () => void;
+}) {
+  const theme = useTheme();
   const insets = useSafeAreaInsets();
   const envOk = isSupabaseEnvConfigured();
 
@@ -67,9 +228,10 @@ export function CaptureScreen() {
   const quickState = useQuickState(todayKey);
   const uploadCover = useUploadCover();
 
-  // Feeling colors learned from this month's entries (same as the drawer).
+  // Fall back to colors learned from this month if the caller has none.
   const currentEntries = useMonthEntries(todayKey.slice(0, 7), { enabled: envOk });
-  const feelingColorMap = useMemo(() => {
+  const colorMap = useMemo(() => {
+    if (feelingColors) return feelingColors;
     const m: Partial<Record<Feeling, NotionSelectColor | null>> = {};
     currentEntries.data?.forEach((e) => {
       if (!e.feeling || !FEELINGS.includes(e.feeling as Feeling)) return;
@@ -77,7 +239,7 @@ export function CaptureScreen() {
       if (!(key in m)) m[key] = e.feelingColor;
     });
     return m;
-  }, [currentEntries.data]);
+  }, [feelingColors, currentEntries.data]);
 
   const [text, setText] = useState('');
   const inputRef = useRef<TextInput>(null);
@@ -167,59 +329,12 @@ export function CaptureScreen() {
     [cropSource, entry.data?.notionPageId, todayKey, uploadCover],
   );
 
-  const close = useCallback(() => {
-    Keyboard.dismiss();
-    if (router.canGoBack()) router.back();
-    else router.navigate('/');
-  }, [router]);
-
-  // Pulling the sheet up to the tall detent means "I want the full editor":
-  // dismiss the composer and open today's day drawer instead. Detent changes
-  // arrive as the sheet resizing this root view — no event API needed. The
-  // first layout only records the baseline (whatever height the sheet opens
-  // at); only a later jump of 150+pt counts as the user pulling it up.
-  const sheetHeightRef = useRef<number | null>(null);
-  const expandedRef = useRef(false);
-  // UIKit can resize the sheet for the keyboard; that must not count as
-  // the user pulling it up.
-  const keyboardShownRef = useRef(false);
-  useEffect(() => {
-    const show = Keyboard.addListener('keyboardWillShow', () => {
-      keyboardShownRef.current = true;
-    });
-    const hide = Keyboard.addListener('keyboardWillHide', () => {
-      keyboardShownRef.current = false;
-    });
-    return () => {
-      show.remove();
-      hide.remove();
-    };
-  }, []);
-  const handleSheetResize = useCallback(
-    (height: number) => {
-      const prev = sheetHeightRef.current;
-      sheetHeightRef.current = height;
-      if (prev === null || expandedRef.current || keyboardShownRef.current) return;
-      if (height - prev < 150) return;
-      expandedRef.current = true;
-      Keyboard.dismiss();
-      if (router.canGoBack()) router.back();
-      else router.navigate('/');
-      // Let the sheet dismissal start before presenting the drawer.
-      setTimeout(() => {
-        router.navigate({ pathname: '/', params: { date: todayKey } });
-      }, 250);
-    },
-    [router, todayKey],
-  );
-
   const canSend = text.trim().length > 0 && envOk && !appendLog.isPending;
   const hasCover = Boolean(entry.data?.coverUrl);
 
   return (
-    <ThemedView
-      onLayout={(e) => handleSheetResize(e.nativeEvent.layout.height)}
-      style={[styles.sheet, { paddingBottom: Math.max(insets.bottom, Spacing.three) }]}>
+    <View
+      style={[styles.composer, { paddingBottom: Math.max(insets.bottom, Spacing.three) }]}>
       <View style={styles.header}>
         <View style={styles.headerTitleGroup}>
           <ThemedText type="subtitle">きろく</ThemedText>
@@ -251,7 +366,7 @@ export function CaptureScreen() {
             )}
           </Pressable>
           <Pressable
-            onPress={close}
+            onPress={onRequestClose}
             accessibilityRole="button"
             accessibilityLabel="閉じる"
             hitSlop={8}
@@ -261,7 +376,7 @@ export function CaptureScreen() {
         </View>
       </View>
 
-      {/* One fixed-height line: keeps the fitToContents sheet from jumping. */}
+      {/* One fixed-height line keeps the compact sheet height stable. */}
       <View style={styles.feedbackLine}>
         {appendLog.error ? (
           <ThemedText type="small" style={{ color: theme.danger }} numberOfLines={1}>
@@ -284,7 +399,7 @@ export function CaptureScreen() {
       <FeelingPicker
         value={(entry.data?.feeling as Feeling | null) ?? null}
         onChange={setFeeling}
-        colorMap={feelingColorMap}
+        colorMap={colorMap}
       />
       <HabitChecks value={entry.data?.habits ?? EMPTY_HABITS} onToggle={toggleHabit} />
 
@@ -324,16 +439,55 @@ export function CaptureScreen() {
         onCancel={() => setCropSource(null)}
         onConfirm={handleCropConfirm}
       />
-    </ThemedView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  sheet: {
-    // Fill the detent so the sheet background is seamless at both sizes.
+  flex: {
     flex: 1,
+  },
+  flexEnd: {
+    flex: 1,
+    justifyContent: 'flex-end',
+  },
+  backdrop: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.35)',
+  },
+  sheet: {
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    overflow: 'hidden',
+  },
+  grabberZone: {
+    height: 26,
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 2,
+  },
+  grabberPress: {
+    paddingHorizontal: Spacing.five,
+    paddingVertical: Spacing.two,
+  },
+  grabber: {
+    width: 40,
+    height: 5,
+    borderRadius: 3,
+  },
+  layer: {
+    position: 'absolute',
+    top: 26,
+    left: 0,
+    right: 0,
+    bottom: 0,
+  },
+  composer: {
     paddingHorizontal: Spacing.four,
-    paddingTop: Spacing.four,
     gap: Spacing.three,
   },
   header: {
