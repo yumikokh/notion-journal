@@ -365,12 +365,7 @@ function Composer({
     <View
       style={[styles.composer, { paddingBottom: Math.max(insets.bottom, Spacing.three) }]}>
       <View style={styles.header}>
-        <View style={styles.headerTitleGroup}>
-          <ThemedText type="subtitle">きろく</ThemedText>
-          <ThemedText type="small" themeColor="textSecondary">
-            {dateLabel}
-          </ThemedText>
-        </View>
+        <ThemedText type="subtitle">{dateLabel}</ThemedText>
         <View style={styles.headerActions}>
           <Pressable
             onPress={pickCover}
@@ -405,7 +400,8 @@ function Composer({
         </View>
       </View>
 
-      {/* One fixed-height line keeps the compact sheet height stable. */}
+      {/* One fixed-height line keeps the compact sheet height stable; the
+          invitation itself lives in the input placeholder. */}
       <View style={styles.feedbackLine}>
         {appendLog.error ? (
           <ThemedText type="small" style={{ color: theme.danger }} numberOfLines={1}>
@@ -418,11 +414,7 @@ function Composer({
               {lastSent.time} きろくしました
             </ThemedText>
           </>
-        ) : (
-          <ThemedText type="small" themeColor="textSecondary">
-            いまの気持ちを、そのまま。
-          </ThemedText>
-        )}
+        ) : null}
       </View>
 
       <FeelingPicker
@@ -438,7 +430,7 @@ function Composer({
           value={text}
           onChangeText={setText}
           multiline
-          placeholder="いま、なにしてる？"
+          placeholder="今の気持ちを、そのまま〜"
           placeholderTextColor={theme.textSecondary}
           style={[styles.input, { color: theme.text, backgroundColor: theme.backgroundElement }]}
         />
@@ -523,11 +515,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-  },
-  headerTitleGroup: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-    gap: Spacing.two,
   },
   headerActions: {
     flexDirection: 'row',

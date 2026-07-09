@@ -527,14 +527,20 @@ export function DayDrawerContent({
                     onPress={handleAi}
                     disabled={!canAi}
                     accessibilityRole="button"
+                    accessibilityLabel="本文からDIARYをまとめる"
                     accessibilityState={{ disabled: !canAi, busy: ai.isPending }}
-                    style={[
-                      styles.aiBtn,
-                      { backgroundColor: theme.accentSoft, opacity: canAi ? 1 : 0.5 },
+                    hitSlop={8}
+                    style={({ pressed }) => [
+                      styles.ghostBtn,
+                      { opacity: !canAi ? 0.35 : pressed ? 0.6 : 1 },
                     ]}>
-                    <Sparkles size={13} color={theme.accent} strokeWidth={2} />
+                    {ai.isPending ? (
+                      <ActivityIndicator size="small" color={theme.accent} />
+                    ) : (
+                      <Sparkles size={13} color={theme.accent} strokeWidth={2} />
+                    )}
                     <ThemedText type="smallBold" style={{ color: theme.accent }}>
-                      {ai.isPending ? 'まとめ中…' : '本文からまとめる'}
+                      {ai.isPending ? 'まとめ中' : 'まとめる'}
                     </ThemedText>
                   </Pressable>
                 </View>
@@ -568,16 +574,17 @@ export function DayDrawerContent({
                     accessibilityRole="button"
                     accessibilityLabel={bodyMode === 'view' ? '本文を編集' : '本文の編集を閉じる'}
                     hitSlop={8}
-                    style={[
-                      styles.bodyToggle,
-                      { backgroundColor: theme.backgroundElement },
-                    ]}>
+                    style={({ pressed }) => [styles.ghostBtn, { opacity: pressed ? 0.6 : 1 }]}>
                     {bodyMode === 'view' ? (
                       <PenLine size={13} color={theme.textSecondary} strokeWidth={2} />
                     ) : (
-                      <Check size={13} color={theme.textSecondary} strokeWidth={2.5} />
+                      <Check size={13} color={theme.accent} strokeWidth={2.5} />
                     )}
-                    <ThemedText type="smallBold" themeColor="textSecondary">
+                    <ThemedText
+                      type="smallBold"
+                      style={{
+                        color: bodyMode === 'view' ? theme.textSecondary : theme.accent,
+                      }}>
                       {bodyMode === 'view' ? '編集' : '完了'}
                     </ThemedText>
                   </Pressable>
@@ -838,25 +845,17 @@ const styles = StyleSheet.create({
     fontSize: 15,
     lineHeight: 22,
   },
-  aiBtn: {
-    flexDirection: 'row',
-    gap: Spacing.one,
-    height: 30,
-    paddingHorizontal: Spacing.three,
-    borderRadius: Radius.lg,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-
-  bodySection: { gap: Spacing.two },
-  bodyToggle: {
+  // Text-style ("ghost") header actions: no fill, just icon + short label —
+  // pills next to section labels read heavier than the content they act on.
+  ghostBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
     height: 30,
-    paddingHorizontal: Spacing.three,
-    borderRadius: Radius.lg,
+    paddingHorizontal: Spacing.one,
   },
+
+  bodySection: { gap: Spacing.two },
   viewBlock: {
     padding: Spacing.three,
     borderRadius: Radius.lg,
