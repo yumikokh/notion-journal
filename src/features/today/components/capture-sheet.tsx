@@ -365,7 +365,12 @@ function Composer({
     <View
       style={[styles.composer, { paddingBottom: Math.max(insets.bottom, Spacing.three) }]}>
       <View style={styles.header}>
-        <ThemedText type="subtitle">{dateLabel}</ThemedText>
+        <View style={styles.titleGroup}>
+          <ThemedText type="subtitle">今日</ThemedText>
+          <ThemedText type="small" themeColor="textSecondary">
+            {dateLabel}
+          </ThemedText>
+        </View>
         <View style={styles.headerActions}>
           <Pressable
             onPress={pickCover}
@@ -400,8 +405,15 @@ function Composer({
         </View>
       </View>
 
-      {/* One fixed-height line keeps the compact sheet height stable; the
-          invitation itself lives in the input placeholder. */}
+      <FeelingPicker
+        value={(entry.data?.feeling as Feeling | null) ?? null}
+        onChange={setFeeling}
+        colorMap={colorMap}
+      />
+      <HabitChecks value={entry.data?.habits ?? EMPTY_HABITS} onToggle={toggleHabit} />
+
+      {/* One fixed-height line keeps the compact sheet height stable; it
+          sits next to the input, where the feedback it reports happens. */}
       <View style={styles.feedbackLine}>
         {appendLog.error ? (
           <ThemedText type="small" style={{ color: theme.danger }} numberOfLines={1}>
@@ -416,13 +428,6 @@ function Composer({
           </>
         ) : null}
       </View>
-
-      <FeelingPicker
-        value={(entry.data?.feeling as Feeling | null) ?? null}
-        onChange={setFeeling}
-        colorMap={colorMap}
-      />
-      <HabitChecks value={entry.data?.habits ?? EMPTY_HABITS} onToggle={toggleHabit} />
 
       <View style={styles.inputRow}>
         <TextInput
@@ -536,11 +541,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  titleGroup: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: Spacing.two,
+  },
   feedbackLine: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.one,
-    height: 18,
+    height: 16,
   },
   inputRow: {
     flexDirection: 'row',
