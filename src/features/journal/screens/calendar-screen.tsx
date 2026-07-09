@@ -2,12 +2,6 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useLocalSearchParams, useRootNavigationState, useRouter } from 'expo-router';
 import { BlurView } from 'expo-blur';
 import { GlassView, isLiquidGlassAvailable } from 'expo-glass-effect';
-import Svg, {
-  Defs,
-  LinearGradient as SvgLinearGradient,
-  Rect,
-  Stop,
-} from 'react-native-svg';
 import { LayoutList, PenLine, RotateCw, SlidersHorizontal } from 'lucide-react-native';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -78,8 +72,17 @@ const WEEKDAY_STRIP_HEIGHT = 22;
 /** Chrome content below the top safe-area inset (the panel bleeds to y=0). */
 const CHROME_CONTENT_HEIGHT =
   Spacing.one + HEADER_BAR_HEIGHT + Spacing.one + WEEKDAY_STRIP_HEIGHT + Spacing.two;
-/** Gradient skirt that melts the band's lower edge into the calendar. */
-const CHROME_SKIRT_HEIGHT = 24;
+/**
+ * Skirt below the band where the frosting dissolves: each strip blurs a
+ * little less and carries a little less of the background wash.
+ */
+const SKIRT_STEPS = [
+  { intensity: 26, wash: '8C' },
+  { intensity: 17, wash: '59' },
+  { intensity: 9, wash: '30' },
+  { intensity: 4, wash: '12' },
+] as const;
+const CHROME_SKIRT_HEIGHT = 28;
 const FLOATING_CHROME_HEIGHT = CHROME_CONTENT_HEIGHT + Spacing.four;
 /** How far the continuous calendar reaches (months before/after today). */
 const MONTHS_BACK = 24;
@@ -411,16 +414,25 @@ export function CalendarScreen() {
               { backgroundColor: `${theme.background}B3` },
             ]}
           />
+          {/* Progressive-blur approximation: stacked strips whose blur
+              intensity and color wash both taper off, so the frosting
+              itself dissolves instead of a bright gradient shining. */}
           <View style={styles.chromeSkirt} pointerEvents="none">
-            <Svg width="100%" height={CHROME_SKIRT_HEIGHT}>
-              <Defs>
-                <SvgLinearGradient id="chromeFade" x1="0" y1="0" x2="0" y2="1">
-                  <Stop offset="0" stopColor={theme.background} stopOpacity="1" />
-                  <Stop offset="1" stopColor={theme.background} stopOpacity="0" />
-                </SvgLinearGradient>
-              </Defs>
-              <Rect width="100%" height={CHROME_SKIRT_HEIGHT} fill="url(#chromeFade)" />
-            </Svg>
+            {SKIRT_STEPS.map((step, i) => (
+              <View key={i} style={styles.chromeSkirtStep}>
+                <BlurView
+                  intensity={step.intensity}
+                  tint={scheme}
+                  style={StyleSheet.absoluteFill}
+                />
+                <View
+                  style={[
+                    StyleSheet.absoluteFill,
+                    { backgroundColor: `${theme.background}${step.wash}` },
+                  ]}
+                />
+              </View>
+            ))}
           </View>
           <View style={styles.chromeHeaderRow}>
             <ThemedText type="subtitle">
@@ -765,6 +777,10 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: -CHROME_SKIRT_HEIGHT,
     height: CHROME_SKIRT_HEIGHT,
+  },
+  chromeSkirtStep: {
+    flex: 1,
+    overflow: 'hidden',
   },
   chromeHeaderRow: {
     height: HEADER_BAR_HEIGHT,
