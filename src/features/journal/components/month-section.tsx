@@ -173,27 +173,29 @@ function DayCell({
           </>
         )}
         <View
-          style={[
-            styles.dateBadge,
-            // Priority: today marker > feeling tint (the feeling is shown as
-            // the date's ground color, not a separate chip) > plain.
-            isToday
-              ? { backgroundColor: theme.accent }
-              : feelingChip && { backgroundColor: feelingChip.background },
-          ]}
+          style={[styles.dateBadge, isToday && { backgroundColor: theme.accent }]}
           accessibilityElementsHidden>
           <ThemedText
             type="small"
             style={[
               styles.dateNumber,
-              {
-                color: isToday ? '#ffffff' : feelingChip ? feelingChip.text : dateColor,
-              },
-              cover && !isToday && !feelingChip && styles.dateNumberOverCover,
+              { color: isToday ? '#ffffff' : dateColor },
+              cover && !isToday && styles.dateNumberOverCover,
             ]}>
             {cell.date.getDate()}
           </ThemedText>
         </View>
+        {/* Feeling: a small dot in the cell's top-right corner, in the
+            saturated end of its Notion color. */}
+        {feelingChip && (
+          <View
+            style={[
+              styles.feelingDot,
+              { backgroundColor: feelingChip.text },
+              cover && styles.feelingDotOverCover,
+            ]}
+          />
+        )}
         <CellMark entry={entry} mode={mode} scheme={scheme} overCover={Boolean(cover)} />
         {diaryInCell.length > 0 && (
           <ThemedText
@@ -309,6 +311,18 @@ const styles = StyleSheet.create({
     textShadowColor: 'rgba(0,0,0,0.8)',
     textShadowRadius: 2,
     fontWeight: '700',
+  },
+  feelingDot: {
+    position: 'absolute',
+    top: 3,
+    right: 3,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  feelingDotOverCover: {
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.9)',
   },
   icon: {
     fontSize: 16,
