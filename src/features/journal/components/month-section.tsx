@@ -233,7 +233,7 @@ function CellMark({ entry, mode, scheme, overCover }: CellMarkProps) {
       <View style={styles.habitIconRow}>
         {activeHabits.map((k) => {
           const Icon = habitIcon(k);
-          return <Icon key={k} size={10} color={iconColor} strokeWidth={2} />;
+          return <Icon key={k} size={11} color={iconColor} strokeWidth={2} />;
         })}
       </View>
     );
@@ -275,7 +275,7 @@ const styles = StyleSheet.create({
     borderRadius: Radius.sm,
     overflow: 'hidden',
     alignItems: 'center',
-    paddingTop: 2,
+    paddingTop: 1,
     gap: 2,
   },
   coverDim: {
