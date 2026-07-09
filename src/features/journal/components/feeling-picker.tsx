@@ -174,12 +174,15 @@ const styles = StyleSheet.create({
     borderRadius: 6,
   },
   dotIdle: {
-    opacity: 0.75,
+    opacity: 0.4,
   },
   dotSelected: {
     width: 20,
     height: 20,
     borderRadius: 10,
+    // The saturated palette at full strength is too loud on the warm
+    // background — let a little of it through instead.
+    opacity: 0.8,
   },
   valueChip: {
     minWidth: 64,
