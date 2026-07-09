@@ -188,9 +188,7 @@ function DayCell({
         {/* Feeling: a small dot in the top-right corner, aligned with the
             date's glyph. The saturated (text) end of the Notion palette —
             the pale tag tint disappears at dot size. */}
-        {feelingChip && (
-          <View style={[styles.feelingDot, { backgroundColor: feelingChip.text }]} />
-        )}
+        {feelingChip && <View style={[styles.feelingDot, { backgroundColor: feelingChip.text }]} />}
         <CellMark entry={entry} mode={mode} scheme={scheme} overCover={Boolean(cover)} />
         {diaryInCell.length > 0 && (
           <ThemedText
@@ -220,9 +218,7 @@ function CellMark({ entry, mode, scheme, overCover }: CellMarkProps) {
   const theme = useTheme();
   const habitsActive = mode.habits === 'all' || mode.habits.length > 0;
   if (habitsActive) {
-    const checked = entry
-      ? Object.keys(entry.habits ?? {}).filter((k) => entry.habits?.[k])
-      : [];
+    const checked = entry ? Object.keys(entry.habits ?? {}).filter((k) => entry.habits?.[k]) : [];
     const activeHabits =
       mode.habits === 'all' ? checked : checked.filter((k) => mode.habits.includes(k));
     if (activeHabits.length === 0) {
@@ -291,7 +287,7 @@ const styles = StyleSheet.create({
     // cell's content stays centered.
     alignSelf: 'flex-start',
     marginLeft: 2,
-    marginTop: -2,
+    marginTop: 1,
     minWidth: 18,
     height: 18,
     borderRadius: 9,
@@ -313,7 +309,7 @@ const styles = StyleSheet.create({
     // Top aligned with the date glyph's cap height; right inset mirrors
     // the date GLYPH's visual inset (badge margin 2 + padding 3 ≈ 5-6pt),
     // not the badge box edge.
-    top: 5,
+    top: 8,
     right: 6,
     width: 8,
     height: 8,
@@ -333,7 +329,8 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     justifyContent: 'center',
     alignItems: 'center',
-    gap: 2,
+    gap: 3,
+    paddingVertical: 1,
     maxWidth: '100%',
   },
   chip: {
