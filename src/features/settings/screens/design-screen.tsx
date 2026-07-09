@@ -8,19 +8,11 @@ import { BottomTabInset, Palettes, Spacing, type PaletteKey } from '@/constants/
 import { usePalette } from '@/features/settings/palette-context';
 import { useTheme } from '@/hooks/use-theme';
 
-const PALETTE_ORDER: PaletteKey[] = [
-  'terracotta',
-  'cream',
-  'kinari',
-  'white',
-  'greige',
-  'coolGray',
-];
+const PALETTE_ORDER: PaletteKey[] = ['terracotta', 'cream', 'coolGray'];
 
 /**
- * デザイン (palette) picker — its own screen so each option can afford a
- * real preview card: the option's own ground, a mock of the today marker /
- * 保存 pill / 今日 chip painted in its tokens, applied on tap.
+ * デザイン (palette) picker — each option is a card in its own ground with
+ * just the accent swatch and name; applied on tap.
  */
 export function DesignScreen() {
   const theme = useTheme();
@@ -62,35 +54,12 @@ export function DesignScreen() {
                   borderWidth: selected ? 2 : 1,
                 },
               ]}>
-              <View style={styles.cardHead}>
-                <ThemedText type="smallBold" style={{ color: l.text }}>
+              <View style={styles.cardRow}>
+                <View style={[styles.accentDot, { backgroundColor: l.accent }]} />
+                <ThemedText style={[styles.cardLabel, { color: l.text }]}>
                   {option.label}
                 </ThemedText>
-                {selected && <Check size={16} color={l.accent} strokeWidth={2.5} />}
-              </View>
-              {/* Mini mock in the option's own tokens. */}
-              <View style={styles.mockRow}>
-                <View style={[styles.mockToday, { backgroundColor: l.accent }]}>
-                  <ThemedText type="small" style={{ color: l.background, fontWeight: '600' }}>
-                    9
-                  </ThemedText>
-                </View>
-                <View style={[styles.mockPill, { backgroundColor: l.accent }]}>
-                  <ThemedText type="small" style={{ color: l.background, fontWeight: '600' }}>
-                    保存
-                  </ThemedText>
-                </View>
-                <View style={[styles.mockPill, { backgroundColor: l.accentSoft }]}>
-                  <ThemedText type="small" style={{ color: l.accent, fontWeight: '600' }}>
-                    今日
-                  </ThemedText>
-                </View>
-                <View style={[styles.mockChip, { backgroundColor: l.backgroundElement }]}>
-                  <ThemedText type="small" style={{ color: l.textSecondary }}>
-                    Aa
-                  </ThemedText>
-                </View>
-                <View style={styles.mockPhoto} />
+                {selected && <Check size={18} color={l.accent} strokeWidth={2.5} />}
               </View>
             </Pressable>
           );
@@ -120,45 +89,21 @@ const styles = StyleSheet.create({
   },
   card: {
     borderRadius: 16,
-    padding: Spacing.three,
-    gap: Spacing.two,
-  },
-  cardHead: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  mockRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.two,
-  },
-  mockToday: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  mockPill: {
-    height: 28,
     paddingHorizontal: Spacing.three,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
+    paddingVertical: Spacing.three + 2,
   },
-  mockChip: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
+  cardRow: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    gap: Spacing.two + 2,
   },
-  mockPhoto: {
-    width: 28,
-    height: 38,
-    borderRadius: 8,
-    // Photo stand-in: fixed gradient-ish tone, palette-independent.
-    backgroundColor: '#9C8A76',
+  cardLabel: {
+    flex: 1,
+    fontWeight: '600',
+  },
+  accentDot: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
   },
 });
