@@ -430,7 +430,7 @@ function Composer({
           value={text}
           onChangeText={setText}
           multiline
-          placeholder="いま、どんな気持ち？"
+          placeholder="今の気持ちを、そのまま。"
           placeholderTextColor={theme.textSecondary}
           style={[styles.input, { color: theme.text, backgroundColor: theme.backgroundElement }]}
         />
