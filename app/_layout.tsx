@@ -18,6 +18,15 @@ export default function RootLayout() {
         <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
           <Stack screenOptions={{ headerShown: false }}>
             <Stack.Screen name="(tabs)" />
+            <Stack.Screen
+              name="capture-sheet"
+              options={{
+                presentation: 'formSheet',
+                sheetAllowedDetents: 'fitToContents',
+                sheetGrabberVisible: true,
+                sheetCornerRadius: 24,
+              }}
+            />
           </Stack>
           <StatusBar style="auto" />
         </ThemeProvider>

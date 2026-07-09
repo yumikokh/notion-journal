@@ -1,22 +1,20 @@
-import { useFocusEffect, useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
+import { useRouter } from 'expo-router';
 import { ArrowUp, Camera, Check, X } from 'lucide-react-native';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Keyboard,
-  KeyboardAvoidingView,
-  Platform,
   Pressable,
   StyleSheet,
   TextInput,
   View,
 } from 'react-native';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { BottomTabInset, Radius, Spacing } from '@/constants/theme';
+import { Radius, Spacing } from '@/constants/theme';
 import {
   CoverCropModal,
   type CropSource,
@@ -28,9 +26,9 @@ import { FEELINGS, type Feeling, type HabitKey } from '@/features/journal/draft'
 import { useMonthEntries } from '@/features/journal/use-month-entries';
 import { useTodayEntry } from '@/features/journal/use-today-entry';
 import { useUploadCover } from '@/features/journal/use-upload-cover';
-import { useAppendLog } from '@/features/today/use-append-log';
-import { useQuickState, toggledHabits } from '@/features/today/use-quick-state';
 import { formatTimeLabel } from '@/features/today/today-log';
+import { useAppendLog } from '@/features/today/use-append-log';
+import { toggledHabits, useQuickState } from '@/features/today/use-quick-state';
 import { useTheme } from '@/hooks/use-theme';
 import { toDateKey } from '@/lib/date';
 import { isSupabaseEnvConfigured } from '@/lib/env';
@@ -46,20 +44,20 @@ const EMPTY_HABITS = {
 } as const;
 
 /**
- * The きろく surface — the system tab bar's detached circle (role="search").
- *
- * Deliberately NOT a journal view: no timeline, no past entries. Just the
- * "today inputs" that fit one tap each — a feeling, habit checks, a cover
- * photo — around the timestamped quick-log input, which focuses the moment
- * the tab opens. Anything deeper (DIARY, body, AI) lives in the day drawer
- * on the calendar.
+ * The きろく composer — presented as a native bottom sheet (formSheet with
+ * fitToContents) over whichever tab was active, so it reads as "jot and go"
+ * rather than a destination screen. Only one-tap today-state inputs live
+ * here (feeling, habits, cover shortcut) around the timestamped quick-log
+ * input, which focuses on open. Anything deeper (DIARY, body, AI) is the
+ * day drawer's job.
  */
 export function CaptureScreen() {
   const theme = useTheme();
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const envOk = isSupabaseEnvConfigured();
 
-  // Recomputed every render so the tab targets the new day after midnight.
+  // Recomputed every render so the sheet targets the new day after midnight.
   const today = new Date();
   const todayKey = toDateKey(today);
   const dateLabel = `${today.getMonth() + 1}/${today.getDate()} (${WEEKDAY_LABELS[today.getDay()]})`;
@@ -85,14 +83,12 @@ export function CaptureScreen() {
   const inputRef = useRef<TextInput>(null);
   const [lastSent, setLastSent] = useState<{ time: string; text: string } | null>(null);
 
-  // Capture-first: focus the input every time the tab opens (after the tab
-  // switch animation, so the keyboard doesn't fight the transition).
-  useFocusEffect(
-    useCallback(() => {
-      const timer = setTimeout(() => inputRef.current?.focus(), 350);
-      return () => clearTimeout(timer);
-    }, []),
-  );
+  // Capture-first: focus once the sheet has settled so the keyboard rides
+  // in right after the presentation animation.
+  useEffect(() => {
+    const timer = setTimeout(() => inputRef.current?.focus(), 450);
+    return () => clearTimeout(timer);
+  }, []);
 
   const send = useCallback(() => {
     const trimmed = text.trim();
@@ -171,147 +167,115 @@ export function CaptureScreen() {
     [cropSource, entry.data?.notionPageId, todayKey, uploadCover],
   );
 
-  // The floating native tab bar overlays content; clear it while the
-  // keyboard is down, hug the keyboard while it's up.
-  const insets = useSafeAreaInsets();
-  const [keyboardShown, setKeyboardShown] = useState(false);
-  useEffect(() => {
-    const show = Keyboard.addListener('keyboardWillShow', () => setKeyboardShown(true));
-    const hide = Keyboard.addListener('keyboardWillHide', () => setKeyboardShown(false));
-    return () => {
-      show.remove();
-      hide.remove();
-    };
-  }, []);
-  const clusterBottom = keyboardShown
-    ? Spacing.two
-    : insets.bottom + BottomTabInset + Spacing.two;
+  const close = useCallback(() => {
+    Keyboard.dismiss();
+    if (router.canGoBack()) router.back();
+    else router.navigate('/');
+  }, [router]);
 
   const canSend = text.trim().length > 0 && envOk && !appendLog.isPending;
   const hasCover = Boolean(entry.data?.coverUrl);
 
   return (
-    <ThemedView style={styles.flex}>
-      <SafeAreaView style={styles.flex} edges={['top']}>
-        <KeyboardAvoidingView
-          style={styles.flex}
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-          <View style={styles.header}>
-            <View style={styles.headerTitleGroup}>
-              <ThemedText type="subtitle">きろく</ThemedText>
-              <ThemedText type="small" themeColor="textSecondary">
-                {dateLabel}
-              </ThemedText>
-            </View>
-            <View style={styles.headerActions}>
-              <Pressable
-                onPress={pickCover}
-                disabled={!envOk || coverBusy}
-                accessibilityRole="button"
-                accessibilityLabel="今日のカバー写真を選ぶ"
-                style={[
-                  styles.coverBtn,
-                  { backgroundColor: hasCover ? theme.accentSoft : theme.backgroundElement },
-                ]}>
-                {coverBusy ? (
-                  <ActivityIndicator size="small" color={theme.accent} />
-                ) : (
-                  <>
-                    <Camera
-                      size={15}
-                      color={hasCover ? theme.accent : theme.textSecondary}
-                      strokeWidth={1.8}
-                    />
-                    {hasCover && <Check size={13} color={theme.accent} strokeWidth={2.5} />}
-                  </>
-                )}
-              </Pressable>
-              <Pressable
-                onPress={() => {
-                  Keyboard.dismiss();
-                  // Return to wherever the user came from (tab history),
-                  // falling back to the diary tab.
-                  if (router.canGoBack()) {
-                    router.back();
-                  } else {
-                    router.navigate('/');
-                  }
-                }}
-                accessibilityRole="button"
-                accessibilityLabel="閉じる"
-                hitSlop={8}
-                style={[styles.closeBtn, { backgroundColor: theme.backgroundElement }]}>
-                <X size={16} color={theme.textSecondary} strokeWidth={2} />
-              </Pressable>
-            </View>
-          </View>
-
-          {/* Quiet middle: only the last capture's confirmation lives here —
-              no timeline, this is a place to write, not to read. */}
-          <View style={styles.feedbackArea}>
-            {appendLog.error ? (
-              <ThemedText type="small" style={{ color: theme.danger }} selectable>
-                送れませんでした: {appendLog.error.message}
-              </ThemedText>
-            ) : lastSent ? (
-              <View style={styles.sentRow}>
-                <Check size={14} color={theme.accent} strokeWidth={2.5} />
-                <ThemedText type="small" themeColor="textSecondary">
-                  {lastSent.time} きろくしました
-                </ThemedText>
-              </View>
+    <ThemedView
+      style={[styles.sheet, { paddingBottom: Math.max(insets.bottom, Spacing.three) }]}>
+      <View style={styles.header}>
+        <View style={styles.headerTitleGroup}>
+          <ThemedText type="subtitle">きろく</ThemedText>
+          <ThemedText type="small" themeColor="textSecondary">
+            {dateLabel}
+          </ThemedText>
+        </View>
+        <View style={styles.headerActions}>
+          <Pressable
+            onPress={pickCover}
+            disabled={!envOk || coverBusy}
+            accessibilityRole="button"
+            accessibilityLabel="今日のカバー写真を選ぶ"
+            style={[
+              styles.coverBtn,
+              { backgroundColor: hasCover ? theme.accentSoft : theme.backgroundElement },
+            ]}>
+            {coverBusy ? (
+              <ActivityIndicator size="small" color={theme.accent} />
             ) : (
-              <ThemedText type="small" themeColor="textSecondary" style={styles.emptyHint}>
-                いまの気持ちを、そのまま。
-              </ThemedText>
+              <>
+                <Camera
+                  size={15}
+                  color={hasCover ? theme.accent : theme.textSecondary}
+                  strokeWidth={1.8}
+                />
+                {hasCover && <Check size={13} color={theme.accent} strokeWidth={2.5} />}
+              </>
             )}
-          </View>
+          </Pressable>
+          <Pressable
+            onPress={close}
+            accessibilityRole="button"
+            accessibilityLabel="閉じる"
+            hitSlop={8}
+            style={[styles.closeBtn, { backgroundColor: theme.backgroundElement }]}>
+            <X size={16} color={theme.textSecondary} strokeWidth={2} />
+          </Pressable>
+        </View>
+      </View>
 
-          <View style={[styles.cluster, { paddingBottom: clusterBottom }]}>
-            <FeelingPicker
-              value={(entry.data?.feeling as Feeling | null) ?? null}
-              onChange={setFeeling}
-              colorMap={feelingColorMap}
-            />
-            <HabitChecks
-              value={entry.data?.habits ?? EMPTY_HABITS}
-              onToggle={toggleHabit}
-            />
-            <View style={styles.inputRow}>
-              <TextInput
-                ref={inputRef}
-                value={text}
-                onChangeText={setText}
-                multiline
-                placeholder="いま、なにしてる？"
-                placeholderTextColor={theme.textSecondary}
-                style={[
-                  styles.input,
-                  { color: theme.text, backgroundColor: theme.backgroundElement },
-                ]}
-              />
-              <Pressable
-                onPress={send}
-                disabled={!canSend}
-                accessibilityRole="button"
-                accessibilityLabel="ログを送る"
-                style={({ pressed }) => [
-                  styles.sendBtn,
-                  {
-                    backgroundColor: canSend ? theme.accent : theme.backgroundSelected,
-                    opacity: pressed ? 0.7 : 1,
-                  },
-                ]}>
-                {appendLog.isPending ? (
-                  <ActivityIndicator size="small" color="#ffffff" />
-                ) : (
-                  <ArrowUp size={18} color="#ffffff" strokeWidth={2.5} />
-                )}
-              </Pressable>
-            </View>
-          </View>
-        </KeyboardAvoidingView>
-      </SafeAreaView>
+      {/* One fixed-height line: keeps the fitToContents sheet from jumping. */}
+      <View style={styles.feedbackLine}>
+        {appendLog.error ? (
+          <ThemedText type="small" style={{ color: theme.danger }} numberOfLines={1}>
+            送れませんでした: {appendLog.error.message}
+          </ThemedText>
+        ) : lastSent ? (
+          <>
+            <Check size={13} color={theme.accent} strokeWidth={2.5} />
+            <ThemedText type="small" themeColor="textSecondary">
+              {lastSent.time} きろくしました
+            </ThemedText>
+          </>
+        ) : (
+          <ThemedText type="small" themeColor="textSecondary">
+            いまの気持ちを、そのまま。
+          </ThemedText>
+        )}
+      </View>
+
+      <FeelingPicker
+        value={(entry.data?.feeling as Feeling | null) ?? null}
+        onChange={setFeeling}
+        colorMap={feelingColorMap}
+      />
+      <HabitChecks value={entry.data?.habits ?? EMPTY_HABITS} onToggle={toggleHabit} />
+
+      <View style={styles.inputRow}>
+        <TextInput
+          ref={inputRef}
+          value={text}
+          onChangeText={setText}
+          multiline
+          placeholder="いま、なにしてる？"
+          placeholderTextColor={theme.textSecondary}
+          style={[styles.input, { color: theme.text, backgroundColor: theme.backgroundElement }]}
+        />
+        <Pressable
+          onPress={send}
+          disabled={!canSend}
+          accessibilityRole="button"
+          accessibilityLabel="ログを送る"
+          style={({ pressed }) => [
+            styles.sendBtn,
+            {
+              backgroundColor: canSend ? theme.accent : theme.backgroundSelected,
+              opacity: pressed ? 0.7 : 1,
+            },
+          ]}>
+          {appendLog.isPending ? (
+            <ActivityIndicator size="small" color="#ffffff" />
+          ) : (
+            <ArrowUp size={18} color="#ffffff" strokeWidth={2.5} />
+          )}
+        </Pressable>
+      </View>
 
       <CoverCropModal
         source={cropSource}
@@ -324,16 +288,15 @@ export function CaptureScreen() {
 }
 
 const styles = StyleSheet.create({
-  flex: {
-    flex: 1,
+  sheet: {
+    paddingHorizontal: Spacing.four,
+    paddingTop: Spacing.four,
+    gap: Spacing.three,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: Spacing.four,
-    paddingTop: Spacing.two,
-    paddingBottom: Spacing.two,
   },
   headerTitleGroup: {
     flexDirection: 'row',
@@ -360,24 +323,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  feedbackArea: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'flex-end',
-    paddingBottom: Spacing.three,
-    paddingHorizontal: Spacing.four,
-  },
-  sentRow: {
+  feedbackLine: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.one,
-  },
-  emptyHint: {
-    textAlign: 'center',
-  },
-  cluster: {
-    paddingHorizontal: Spacing.three,
-    gap: Spacing.two,
+    height: 18,
   },
   inputRow: {
     flexDirection: 'row',
