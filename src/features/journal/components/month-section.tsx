@@ -308,7 +308,9 @@ const styles = StyleSheet.create({
   },
   feelingDot: {
     position: 'absolute',
-    top: 3,
+    // Aligns the dot's top with the date glyph's cap height (badge sits at
+    // y=2 with the 12pt number vertically centered in its 18pt height).
+    top: 5,
     right: 3,
     width: 8,
     height: 8,
