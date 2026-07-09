@@ -286,14 +286,19 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.14)',
   },
   dateBadge: {
-    minWidth: 20,
-    height: 20,
-    borderRadius: 10,
+    // Top-left corner (Notion/Google-calendar style); the rest of the
+    // cell's content stays centered.
+    alignSelf: 'flex-start',
+    marginLeft: 5,
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
     paddingHorizontal: 3,
     alignItems: 'center',
     justifyContent: 'center',
   },
   dateNumber: {
+    fontSize: 13,
     lineHeight: 16,
   },
   dateNumberOverCover: {
