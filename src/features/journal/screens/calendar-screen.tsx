@@ -1,5 +1,5 @@
 import { useQueryClient } from '@tanstack/react-query';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useLocalSearchParams, useRootNavigationState, useRouter } from 'expo-router';
 import { GlassView, isLiquidGlassAvailable } from 'expo-glass-effect';
 import { LayoutList, PenLine, RotateCw, SlidersHorizontal } from 'lucide-react-native';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -227,7 +227,11 @@ export function CalendarScreen() {
   // param so navigating back to the calendar tab doesn't re-trigger it.
   const params = useLocalSearchParams<{ date?: string | string[] }>();
   const router = useRouter();
+  // A cold-start deep link delivers the param before the root navigator has
+  // mounted; touching the router then throws. Wait for the nav-state key.
+  const navReady = Boolean(useRootNavigationState()?.key);
   useEffect(() => {
+    if (!navReady) return;
     const raw = Array.isArray(params.date) ? params.date[0] : params.date;
     if (!raw || !/^\d{4}-\d{2}-\d{2}$/.test(raw)) return;
     const [yearStr, monthStr] = raw.split('-');
@@ -235,7 +239,7 @@ export function CalendarScreen() {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- syncing URL param into local UI state on change is exactly the subscription pattern.
     setDrawerDate(raw);
     router.setParams({ date: undefined });
-  }, [params.date, router, scrollToMonth]);
+  }, [navReady, params.date, router, scrollToMonth]);
 
   const updatePrefs = useCallback((mutate: (prev: CalendarPrefs) => CalendarPrefs) => {
     setPrefs((prev) => {
