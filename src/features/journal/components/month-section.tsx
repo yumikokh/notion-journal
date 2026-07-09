@@ -172,24 +172,24 @@ function DayCell({
             <View style={styles.coverDim} />
           </>
         )}
-        <View
-          style={[styles.dateBadge, isToday && { backgroundColor: theme.accent }]}
-          accessibilityElementsHidden>
-          <ThemedText
-            type="small"
-            style={[
-              styles.dateNumber,
-              { color: isToday ? '#ffffff' : dateColor },
-              cover && !isToday && styles.dateNumberOverCover,
-            ]}>
-            {cell.date.getDate()}
-          </ThemedText>
+        <View style={styles.dateRow} accessibilityElementsHidden>
+          <View style={[styles.dateBadge, isToday && { backgroundColor: theme.accent }]}>
+            <ThemedText
+              type="small"
+              style={[
+                styles.dateNumber,
+                { color: isToday ? '#ffffff' : dateColor },
+                cover && !isToday && styles.dateNumberOverCover,
+              ]}>
+              {cell.date.getDate()}
+            </ThemedText>
+          </View>
+          {/* Feeling: a small dot beside the date, vertically centered,
+              in the saturated end of its Notion color. */}
+          {feelingChip && (
+            <View style={[styles.feelingDot, { backgroundColor: feelingChip.text }]} />
+          )}
         </View>
-        {/* Feeling: a small dot in the cell's top-right corner, in the
-            saturated end of its Notion color. */}
-        {feelingChip && (
-          <View style={[styles.feelingDot, { backgroundColor: feelingChip.text }]} />
-        )}
         <CellMark entry={entry} mode={mode} scheme={scheme} overCover={Boolean(cover)} />
         {diaryInCell.length > 0 && (
           <ThemedText
@@ -284,12 +284,17 @@ const styles = StyleSheet.create({
     bottom: 0,
     backgroundColor: 'rgba(0,0,0,0.14)',
   },
-  dateBadge: {
+  dateRow: {
     // Top-left corner (Notion/Google-calendar style); the rest of the
     // cell's content stays centered.
     alignSelf: 'flex-start',
     marginLeft: 2,
     marginTop: -2,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+  },
+  dateBadge: {
     minWidth: 18,
     height: 18,
     borderRadius: 9,
@@ -307,12 +312,6 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   feelingDot: {
-    position: 'absolute',
-    // Aligns the dot's top with the date glyph's cap height (badge sits at
-    // y=2 with the 12pt number vertically centered in its 18pt height).
-    top: 5,
-    // Mirrors the date badge's 2pt inset on the left edge.
-    right: 2,
     width: 8,
     height: 8,
     borderRadius: 4,
