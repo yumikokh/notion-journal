@@ -139,6 +139,8 @@ function DayCell({
   const isHoliday = getJapaneseHoliday(cell.date) !== null;
   const cover = mode.showCover && entry?.coverUrl ? entry.coverUrl : null;
   const diaryInCell = mode.showDiary && entry?.diary ? entry.diary.trim() : '';
+  const feelingChip =
+    mode.showMark && entry?.feeling ? notionChipColor(entry.feelingColor, scheme) : null;
 
   const dateColor = cover
     ? '#ffffff'
@@ -171,14 +173,23 @@ function DayCell({
           </>
         )}
         <View
-          style={[styles.dateBadge, isToday && { backgroundColor: theme.accent }]}
+          style={[
+            styles.dateBadge,
+            // Priority: today marker > feeling tint (the feeling is shown as
+            // the date's ground color, not a separate chip) > plain.
+            isToday
+              ? { backgroundColor: theme.accent }
+              : feelingChip && { backgroundColor: feelingChip.background },
+          ]}
           accessibilityElementsHidden>
           <ThemedText
             type="small"
             style={[
               styles.dateNumber,
-              { color: isToday ? '#ffffff' : dateColor },
-              cover && !isToday && styles.dateNumberOverCover,
+              {
+                color: isToday ? '#ffffff' : feelingChip ? feelingChip.text : dateColor,
+              },
+              cover && !isToday && !feelingChip && styles.dateNumberOverCover,
             ]}>
             {cell.date.getDate()}
           </ThemedText>
@@ -244,16 +255,8 @@ function CellMark({ entry, mode, scheme, overCover }: CellMarkProps) {
   if (entry?.icon?.type === 'external') {
     return <Image source={entry.icon.url} style={styles.iconImage} />;
   }
-  if (entry?.feeling && !overCover) {
-    const chip = notionChipColor(entry.feelingColor, scheme);
-    return (
-      <View style={[styles.chip, { backgroundColor: chip.background }]}>
-        <ThemedText style={[styles.chipText, { color: chip.text }]} numberOfLines={1}>
-          {entry.feeling}
-        </ThemedText>
-      </View>
-    );
-  }
+  // Feeling is expressed as the date badge's ground color (see DayCell),
+  // not as a mark of its own.
   return null;
 }
 
@@ -289,7 +292,8 @@ const styles = StyleSheet.create({
     // Top-left corner (Notion/Google-calendar style); the rest of the
     // cell's content stays centered.
     alignSelf: 'flex-start',
-    marginLeft: 5,
+    marginLeft: 2,
+    marginTop: -2,
     minWidth: 18,
     height: 18,
     borderRadius: 9,
