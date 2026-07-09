@@ -1,6 +1,13 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { useLocalSearchParams, useRootNavigationState, useRouter } from 'expo-router';
+import { BlurView } from 'expo-blur';
 import { GlassView, isLiquidGlassAvailable } from 'expo-glass-effect';
+import Svg, {
+  Defs,
+  LinearGradient as SvgLinearGradient,
+  Rect,
+  Stop,
+} from 'react-native-svg';
 import { LayoutList, PenLine, RotateCw, SlidersHorizontal } from 'lucide-react-native';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -71,7 +78,9 @@ const WEEKDAY_STRIP_HEIGHT = 22;
 /** Chrome content below the top safe-area inset (the panel bleeds to y=0). */
 const CHROME_CONTENT_HEIGHT =
   Spacing.one + HEADER_BAR_HEIGHT + Spacing.one + WEEKDAY_STRIP_HEIGHT + Spacing.two;
-const FLOATING_CHROME_HEIGHT = CHROME_CONTENT_HEIGHT + Spacing.two;
+/** Gradient skirt that melts the band's lower edge into the calendar. */
+const CHROME_SKIRT_HEIGHT = 24;
+const FLOATING_CHROME_HEIGHT = CHROME_CONTENT_HEIGHT + Spacing.four;
 /** How far the continuous calendar reaches (months before/after today). */
 const MONTHS_BACK = 24;
 const MONTHS_FORWARD = 1;
@@ -390,15 +399,29 @@ export function CalendarScreen() {
           )}
         </View>
 
-        {/* Floating chrome: ONE flat band (app background color) bleeding
-            edge-to-edge from the very top of the screen, holding the month
-            title, the glass action buttons and the weekday row. The buttons
-            carry the glass; the band itself stays quiet. */}
-        <View
-          style={[
-            styles.chromePanel,
-            { paddingTop: insets.top + Spacing.one, backgroundColor: theme.background },
-          ]}>
+        {/* Floating chrome: ONE frosted band bleeding edge-to-edge from the
+            very top of the screen — a blur with a wash of the background
+            color over it, and a gradient skirt below so its lower edge
+            melts into the calendar instead of cutting it. */}
+        <View style={[styles.chromePanel, { paddingTop: insets.top + Spacing.one }]}>
+          <BlurView intensity={36} tint={scheme} style={StyleSheet.absoluteFill} />
+          <View
+            style={[
+              StyleSheet.absoluteFill,
+              { backgroundColor: `${theme.background}B3` },
+            ]}
+          />
+          <View style={styles.chromeSkirt} pointerEvents="none">
+            <Svg width="100%" height={CHROME_SKIRT_HEIGHT}>
+              <Defs>
+                <SvgLinearGradient id="chromeFade" x1="0" y1="0" x2="0" y2="1">
+                  <Stop offset="0" stopColor={theme.background} stopOpacity="1" />
+                  <Stop offset="1" stopColor={theme.background} stopOpacity="0" />
+                </SvgLinearGradient>
+              </Defs>
+              <Rect width="100%" height={CHROME_SKIRT_HEIGHT} fill="url(#chromeFade)" />
+            </Svg>
+          </View>
           <View style={styles.chromeHeaderRow}>
             <ThemedText type="subtitle">
               {visibleMonth.year}年{visibleMonth.month + 1}月
@@ -735,6 +758,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.three,
     paddingBottom: Spacing.two,
     gap: Spacing.one,
+  },
+  chromeSkirt: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: -CHROME_SKIRT_HEIGHT,
+    height: CHROME_SKIRT_HEIGHT,
   },
   chromeHeaderRow: {
     height: HEADER_BAR_HEIGHT,
