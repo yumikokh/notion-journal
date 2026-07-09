@@ -1,6 +1,6 @@
-import { useFocusEffect } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
-import { ArrowUp, Camera, Check } from 'lucide-react-native';
+import { ArrowUp, Camera, Check, X } from 'lucide-react-native';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -56,6 +56,7 @@ const EMPTY_HABITS = {
  */
 export function CaptureScreen() {
   const theme = useTheme();
+  const router = useRouter();
   const envOk = isSupabaseEnvConfigured();
 
   // Recomputed every render so the tab targets the new day after midnight.
@@ -202,28 +203,47 @@ export function CaptureScreen() {
                 {dateLabel}
               </ThemedText>
             </View>
-            <Pressable
-              onPress={pickCover}
-              disabled={!envOk || coverBusy}
-              accessibilityRole="button"
-              accessibilityLabel="今日のカバー写真を選ぶ"
-              style={[
-                styles.coverBtn,
-                { backgroundColor: hasCover ? theme.accentSoft : theme.backgroundElement },
-              ]}>
-              {coverBusy ? (
-                <ActivityIndicator size="small" color={theme.accent} />
-              ) : (
-                <>
-                  <Camera
-                    size={15}
-                    color={hasCover ? theme.accent : theme.textSecondary}
-                    strokeWidth={1.8}
-                  />
-                  {hasCover && <Check size={13} color={theme.accent} strokeWidth={2.5} />}
-                </>
-              )}
-            </Pressable>
+            <View style={styles.headerActions}>
+              <Pressable
+                onPress={pickCover}
+                disabled={!envOk || coverBusy}
+                accessibilityRole="button"
+                accessibilityLabel="今日のカバー写真を選ぶ"
+                style={[
+                  styles.coverBtn,
+                  { backgroundColor: hasCover ? theme.accentSoft : theme.backgroundElement },
+                ]}>
+                {coverBusy ? (
+                  <ActivityIndicator size="small" color={theme.accent} />
+                ) : (
+                  <>
+                    <Camera
+                      size={15}
+                      color={hasCover ? theme.accent : theme.textSecondary}
+                      strokeWidth={1.8}
+                    />
+                    {hasCover && <Check size={13} color={theme.accent} strokeWidth={2.5} />}
+                  </>
+                )}
+              </Pressable>
+              <Pressable
+                onPress={() => {
+                  Keyboard.dismiss();
+                  // Return to wherever the user came from (tab history),
+                  // falling back to the diary tab.
+                  if (router.canGoBack()) {
+                    router.back();
+                  } else {
+                    router.navigate('/');
+                  }
+                }}
+                accessibilityRole="button"
+                accessibilityLabel="閉じる"
+                hitSlop={8}
+                style={[styles.closeBtn, { backgroundColor: theme.backgroundElement }]}>
+                <X size={16} color={theme.textSecondary} strokeWidth={2} />
+              </Pressable>
+            </View>
           </View>
 
           {/* Quiet middle: only the last capture's confirmation lives here —
@@ -320,6 +340,11 @@ const styles = StyleSheet.create({
     alignItems: 'baseline',
     gap: Spacing.two,
   },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.two,
+  },
   coverBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -327,6 +352,13 @@ const styles = StyleSheet.create({
     height: 32,
     paddingHorizontal: Spacing.three,
     borderRadius: 16,
+  },
+  closeBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   feedbackArea: {
     flex: 1,

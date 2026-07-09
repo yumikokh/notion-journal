@@ -33,6 +33,11 @@ export default function AppTabs() {
         <NativeTabs.Trigger.Label>ふりかえり</NativeTabs.Trigger.Label>
       </NativeTabs.Trigger>
 
+      <NativeTabs.Trigger name="settings">
+        <NativeTabs.Trigger.Icon sf="gearshape.fill" />
+        <NativeTabs.Trigger.Label>設定</NativeTabs.Trigger.Label>
+      </NativeTabs.Trigger>
+
       <NativeTabs.Trigger name="capture" role="search">
         <NativeTabs.Trigger.Icon sf="square.and.pencil" />
         <NativeTabs.Trigger.Label>きろく</NativeTabs.Trigger.Label>

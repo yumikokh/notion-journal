@@ -1,14 +1,7 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { GlassContainer, GlassView, isLiquidGlassAvailable } from 'expo-glass-effect';
-import {
-  ChevronRight,
-  LayoutList,
-  MoreHorizontal,
-  RotateCw,
-  Settings,
-  SlidersHorizontal,
-} from 'lucide-react-native';
+import { LayoutList, RotateCw, SlidersHorizontal } from 'lucide-react-native';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -147,14 +140,6 @@ export function CalendarScreen() {
   const [drawerDate, setDrawerDate] = useState<string | null>(null);
 
   const insets = useSafeAreaInsets();
-
-  // Header submenu (⋯): display-mode switcher + settings.
-  const [subMenuOpen, setSubMenuOpen] = useState(false);
-  const openModeSheetFromMenu = useCallback(() => {
-    setSubMenuOpen(false);
-    // Let the menu modal dismiss before presenting the mode sheet modal.
-    setTimeout(openModeSheet, 250);
-  }, [openModeSheet]);
 
   // Header label follows the topmost visible month while scrolling.
   const [visibleIndex, setVisibleIndex] = useState(currentMonthIndex);
@@ -446,11 +431,11 @@ export function CalendarScreen() {
               isInteractive
               style={[styles.actionGlass, !glassOk && { backgroundColor: theme.backgroundElement }]}>
               <Pressable
-                onPress={() => setSubMenuOpen(true)}
+                onPress={openModeSheet}
                 accessibilityRole="button"
-                accessibilityLabel="メニュー"
+                accessibilityLabel="表示モードを切り替え"
                 style={styles.glassBtnInner}>
-                <MoreHorizontal size={16} color={theme.textSecondary} strokeWidth={1.8} />
+                <SlidersHorizontal size={16} color={theme.textSecondary} strokeWidth={1.8} />
               </Pressable>
             </GlassView>
             <GlassView
@@ -690,55 +675,6 @@ export function CalendarScreen() {
         </KeyboardAvoidingView>
       </Modal>
 
-      {/* Header submenu: quiet actions that don't deserve their own button. */}
-      <Modal
-        visible={subMenuOpen}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setSubMenuOpen(false)}>
-        <Pressable
-          style={styles.menuBackdrop}
-          accessibilityLabel="メニューを閉じる"
-          onPress={() => setSubMenuOpen(false)}>
-          <GlassView
-            glassEffectStyle="regular"
-            style={[
-              styles.menuCard,
-              { top: insets.top + 52 },
-              !glassOk && { backgroundColor: theme.background },
-            ]}>
-            <Pressable
-              onPress={openModeSheetFromMenu}
-              accessibilityRole="button"
-              style={({ pressed }) => [styles.menuItem, pressed && { opacity: 0.6 }]}>
-              <View style={styles.menuItemLabel}>
-                <SlidersHorizontal size={16} color={theme.textSecondary} strokeWidth={1.8} />
-                <ThemedText>表示モード</ThemedText>
-              </View>
-              <View style={styles.menuItemValue}>
-                <ThemedText type="small" themeColor="textSecondary">
-                  {viewMode.label}
-                </ThemedText>
-                <ChevronRight size={16} color={theme.textSecondary} strokeWidth={1.8} />
-              </View>
-            </Pressable>
-            <View style={[styles.menuDivider, { backgroundColor: theme.backgroundElement }]} />
-            <Pressable
-              onPress={() => {
-                setSubMenuOpen(false);
-                router.push('/settings');
-              }}
-              accessibilityRole="button"
-              style={({ pressed }) => [styles.menuItem, pressed && { opacity: 0.6 }]}>
-              <View style={styles.menuItemLabel}>
-                <Settings size={16} color={theme.textSecondary} strokeWidth={1.8} />
-                <ThemedText>設定</ThemedText>
-              </View>
-            </Pressable>
-          </GlassView>
-        </Pressable>
-      </Modal>
-
       <DayDrawer date={drawerDate} onClose={closeDrawer} feelingColors={feelingColorMap} />
     </ThemedView>
   );
@@ -877,39 +813,5 @@ const styles = StyleSheet.create({
   },
   listContainer: {
     flex: 1,
-  },
-  menuBackdrop: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.15)',
-  },
-  menuCard: {
-    position: 'absolute',
-    right: Spacing.three,
-    minWidth: 200,
-    borderRadius: Radius.lg,
-    overflow: 'hidden',
-    paddingVertical: Spacing.one,
-  },
-  menuItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: Spacing.three,
-    paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.two + 2,
-  },
-  menuItemLabel: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.two,
-  },
-  menuItemValue: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.one,
-  },
-  menuDivider: {
-    height: StyleSheet.hairlineWidth,
-    marginHorizontal: Spacing.two,
   },
 });

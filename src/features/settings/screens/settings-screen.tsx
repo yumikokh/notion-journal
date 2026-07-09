@@ -1,6 +1,3 @@
-import { GlassView, isLiquidGlassAvailable } from 'expo-glass-effect';
-import { useRouter } from 'expo-router';
-import { ChevronLeft } from 'lucide-react-native';
 import { useEffect, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 
@@ -16,12 +13,8 @@ import {
 } from '@/features/settings/prompt-storage';
 import { useTheme } from '@/hooks/use-theme';
 
-/** Liquid glass needs iOS 26+; older systems get solid-color fallbacks. */
-const glassOk = isLiquidGlassAvailable();
-
 export function SettingsScreen() {
   const theme = useTheme();
-  const router = useRouter();
   const [prompt, setPrompt] = useState('');
   const [loaded, setLoaded] = useState<string>(''); // last persisted value
 
@@ -64,23 +57,7 @@ export function SettingsScreen() {
         keyboardDismissMode="interactive"
         automaticallyAdjustKeyboardInsets
         showsVerticalScrollIndicator={false}>
-        {/* Pushed from the diary header menu (no tab slot) — bring your own back. */}
-        <View style={styles.headerRow}>
-          <GlassView
-            glassEffectStyle="regular"
-            isInteractive
-            style={[styles.backGlass, !glassOk && { backgroundColor: theme.backgroundElement }]}>
-            <Pressable
-              onPress={() => (router.canGoBack() ? router.back() : router.replace('/'))}
-              accessibilityRole="button"
-              accessibilityLabel="戻る"
-              hitSlop={8}
-              style={styles.backGlassInner}>
-              <ChevronLeft size={20} color={theme.text} strokeWidth={2} />
-            </Pressable>
-          </GlassView>
-          <ThemedText type="subtitle">設定</ThemedText>
-        </View>
+        <ThemedText type="subtitle">設定</ThemedText>
 
         <ReminderSection />
 
@@ -145,21 +122,6 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.four,
     paddingBottom: BottomTabInset + Spacing.four,
     gap: Spacing.four,
-  },
-  headerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.two,
-  },
-  backGlass: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-  },
-  backGlassInner: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   section: {
     gap: Spacing.two,
