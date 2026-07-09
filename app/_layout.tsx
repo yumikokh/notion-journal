@@ -5,6 +5,7 @@ import { useColorScheme } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import { useNotificationTap } from '@/features/notifications/use-notification-tap';
+import { PaletteProvider } from '@/features/settings/palette-context';
 import { useReminderSync } from '@/features/notifications/use-reminder-sync';
 import { persistOptions, queryClient } from '@/lib/query-client';
 
@@ -15,12 +16,14 @@ export default function RootLayout() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <PersistQueryClientProvider client={queryClient} persistOptions={persistOptions}>
         <NotificationsBridge />
+        <PaletteProvider>
         <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
           <Stack screenOptions={{ headerShown: false }}>
             <Stack.Screen name="(tabs)" />
           </Stack>
           <StatusBar style="auto" />
         </ThemeProvider>
+        </PaletteProvider>
       </PersistQueryClientProvider>
     </GestureHandlerRootView>
   );

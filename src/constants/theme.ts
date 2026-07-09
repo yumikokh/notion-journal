@@ -12,33 +12,195 @@ import { Platform } from 'react-native';
  * `holiday` / `saturday` keep the Japanese calendar convention (red Sun/
  * holiday, blue Sat) but desaturated so the grid stays calm.
  */
+/**
+ * Selectable palettes (settings > デザイン). Every palette provides the same
+ * token set for light and dark; semantic colors (danger / holiday /
+ * saturday) stay constant across palettes.
+ */
+export const Palettes = {
+  // 初代「クリーム × テラコッタ」— the original warm pairing.
+  terracotta: {
+    label: 'テラコッタ',
+    light: {
+      text: '#3B342B',
+      background: '#FBF8F3',
+      backgroundElement: '#F2EDE5',
+      backgroundSelected: '#E8E0D2',
+      textSecondary: '#8B8272',
+      accent: '#C67B5C',
+      accentSoft: '#F6E3D9',
+      danger: '#C05F5F',
+      holiday: '#C67878',
+      saturday: '#7B93B5',
+    },
+    dark: {
+      text: '#EDE6DA',
+      background: '#181512',
+      backgroundElement: '#25211B',
+      backgroundSelected: '#332D24',
+      textSecondary: '#A89E8C',
+      accent: '#D99070',
+      accentSoft: '#3C2E25',
+      danger: '#D98A8A',
+      holiday: '#D99090',
+      saturday: '#93A8C8',
+    },
+  },
+  // A「クリーム × 墨」— the warm paper ground with a sumi-ink accent.
+  cream: {
+    label: 'クリーム',
+    light: {
+      text: '#3B342B',
+      background: '#FBF8F3',
+      backgroundElement: '#F2EDE5',
+      backgroundSelected: '#E8E0D2',
+      textSecondary: '#8B8272',
+      accent: '#55493C',
+      accentSoft: '#E7E0D4',
+      danger: '#C05F5F',
+      holiday: '#C67878',
+      saturday: '#7B93B5',
+    },
+    dark: {
+      text: '#EDE6DA',
+      background: '#181512',
+      backgroundElement: '#25211B',
+      backgroundSelected: '#332D24',
+      textSecondary: '#A89E8C',
+      accent: '#C9BBA6',
+      accentSoft: '#3A342A',
+      danger: '#D98A8A',
+      holiday: '#D99090',
+      saturday: '#93A8C8',
+    },
+  },
+  // B「生成りホワイト × 墨」— cream's warmth, one step closer to white.
+  kinari: {
+    label: '生成り',
+    light: {
+      text: '#37332C',
+      background: '#FDFCF9',
+      backgroundElement: '#F3F0E9',
+      backgroundSelected: '#E9E4D9',
+      textSecondary: '#8D897E',
+      accent: '#4F463A',
+      accentSoft: '#EDE9DF',
+      danger: '#C05F5F',
+      holiday: '#C67878',
+      saturday: '#7B93B5',
+    },
+    dark: {
+      text: '#EBE8E1',
+      background: '#191815',
+      backgroundElement: '#242220',
+      backgroundSelected: '#302D26',
+      textSecondary: '#A5A095',
+      accent: '#C6BDAD',
+      accentSoft: '#332F28',
+      danger: '#D98A8A',
+      holiday: '#D99090',
+      saturday: '#93A8C8',
+    },
+  },
+  // C「ピュアホワイト × ニュートラル墨」— the most modern, photo-first.
+  white: {
+    label: 'ホワイト',
+    light: {
+      text: '#333029',
+      background: '#FFFFFF',
+      backgroundElement: '#F4F3F0',
+      backgroundSelected: '#E8E6E1',
+      textSecondary: '#8E8B84',
+      accent: '#454239',
+      accentSoft: '#EEECE7',
+      danger: '#C05F5F',
+      holiday: '#C67878',
+      saturday: '#7B93B5',
+    },
+    dark: {
+      text: '#EAE8E4',
+      background: '#161514',
+      backgroundElement: '#222120',
+      backgroundSelected: '#2E2C2A',
+      textSecondary: '#A19E97',
+      accent: '#BFBBB0',
+      accentSoft: '#2C2A27',
+      danger: '#D98A8A',
+      holiday: '#D99090',
+      saturday: '#93A8C8',
+    },
+  },
+  // D「グレージュ × 墨」— stone rather than paper; the quietest ground.
+  greige: {
+    label: 'グレージュ',
+    light: {
+      text: '#36332D',
+      background: '#F3F1ED',
+      backgroundElement: '#E9E6E0',
+      backgroundSelected: '#DDD9D1',
+      textSecondary: '#89857C',
+      accent: '#4E483F',
+      accentSoft: '#E2DED6',
+      danger: '#C05F5F',
+      holiday: '#C67878',
+      saturday: '#7B93B5',
+    },
+    dark: {
+      text: '#E8E6E1',
+      background: '#1A1917',
+      backgroundElement: '#252421',
+      backgroundSelected: '#31302C',
+      textSecondary: '#A09D96',
+      accent: '#C2BCB0',
+      accentSoft: '#2E2C28',
+      danger: '#D98A8A',
+      holiday: '#D99090',
+      saturday: '#93A8C8',
+    },
+  },
+  // E「クールグレー × 鉄墨」— a neutral, tool-like ground where photos and
+  // kaomoji carry the color.
+  coolGray: {
+    label: 'クールグレー',
+    light: {
+      text: '#2F3033',
+      background: '#F7F7F8',
+      backgroundElement: '#ECEDEF',
+      backgroundSelected: '#E0E1E5',
+      textSecondary: '#85868B',
+      accent: '#3F4043',
+      accentSoft: '#E5E6E9',
+      danger: '#C05F5F',
+      holiday: '#C67878',
+      saturday: '#7B93B5',
+    },
+    dark: {
+      text: '#E7E7E9',
+      background: '#171719',
+      backgroundElement: '#222225',
+      backgroundSelected: '#2E2F33',
+      textSecondary: '#9C9DA2',
+      accent: '#B8B9BE',
+      accentSoft: '#2A2B2E',
+      danger: '#D98A8A',
+      holiday: '#D99090',
+      saturday: '#93A8C8',
+    },
+  },
+} as const;
+
+export type PaletteKey = keyof typeof Palettes;
+export const DEFAULT_PALETTE: PaletteKey = 'coolGray';
+
+/** Turn a persisted string back into a palette key (fallback: default). */
+export function parsePaletteKey(value: string | null | undefined): PaletteKey {
+  return value && value in Palettes ? (value as PaletteKey) : DEFAULT_PALETTE;
+}
+
+/** Static default palette — for tests and non-reactive call sites. */
 export const Colors = {
-  // Variant E「クールグレー × 鉄墨」— a neutral, tool-like ground where the
-  // accent is a near-monochrome iron ink; photos and kaomoji carry the color.
-  light: {
-    text: '#2F3033',
-    background: '#F7F7F8',
-    backgroundElement: '#ECEDEF',
-    backgroundSelected: '#E0E1E5',
-    textSecondary: '#85868B',
-    accent: '#3F4043',
-    accentSoft: '#E5E6E9',
-    danger: '#C05F5F',
-    holiday: '#C67878',
-    saturday: '#7B93B5',
-  },
-  dark: {
-    text: '#E7E7E9',
-    background: '#171719',
-    backgroundElement: '#222225',
-    backgroundSelected: '#2E2F33',
-    textSecondary: '#9C9DA2',
-    accent: '#B8B9BE',
-    accentSoft: '#2A2B2E',
-    danger: '#D98A8A',
-    holiday: '#D99090',
-    saturday: '#93A8C8',
-  },
+  light: Palettes[DEFAULT_PALETTE].light,
+  dark: Palettes[DEFAULT_PALETTE].dark,
 } as const;
 
 export type ThemeColor = keyof typeof Colors.light & keyof typeof Colors.dark;

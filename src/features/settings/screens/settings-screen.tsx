@@ -1,9 +1,12 @@
+import { useRouter } from 'expo-router';
+import { ChevronRight } from 'lucide-react-native';
 import { useEffect, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 
 import { ScreenContainer } from '@/components/screen-container';
 import { ThemedText } from '@/components/themed-text';
-import { BottomTabInset, Spacing } from '@/constants/theme';
+import { BottomTabInset, Palettes, Spacing } from '@/constants/theme';
+import { usePalette } from '@/features/settings/palette-context';
 import { GoogleSection } from '@/features/calendar/components/google-section';
 import { ReminderSection } from '@/features/notifications/components/reminder-section';
 import {
@@ -15,6 +18,8 @@ import { useTheme } from '@/hooks/use-theme';
 
 export function SettingsScreen() {
   const theme = useTheme();
+  const router = useRouter();
+  const { palette } = usePalette();
   const [prompt, setPrompt] = useState('');
   const [loaded, setLoaded] = useState<string>(''); // last persisted value
 
@@ -58,6 +63,29 @@ export function SettingsScreen() {
         automaticallyAdjustKeyboardInsets
         showsVerticalScrollIndicator={false}>
         <ThemedText type="subtitle">設定</ThemedText>
+
+        <View style={styles.section}>
+          <ThemedText type="smallBold" themeColor="textSecondary" style={styles.sectionLabel}>
+            デザイン
+          </ThemedText>
+          <Pressable
+            onPress={() => router.push('/design')}
+            accessibilityRole="button"
+            accessibilityLabel="デザインを選ぶ"
+            style={({ pressed }) => [
+              styles.navRow,
+              { backgroundColor: theme.backgroundElement, opacity: pressed ? 0.7 : 1 },
+            ]}>
+            <ThemedText>テーマ</ThemedText>
+            <View style={styles.navValue}>
+              <View style={[styles.paletteDot, { backgroundColor: theme.accent }]} />
+              <ThemedText type="small" themeColor="textSecondary">
+                {Palettes[palette].label}
+              </ThemedText>
+              <ChevronRight size={16} color={theme.textSecondary} strokeWidth={1.8} />
+            </View>
+          </Pressable>
+        </View>
 
         <ReminderSection />
 
@@ -128,6 +156,24 @@ const styles = StyleSheet.create({
   },
   sectionLabel: {
     textTransform: 'uppercase',
+  },
+  navRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderRadius: 14,
+    paddingHorizontal: Spacing.three,
+    paddingVertical: Spacing.three,
+  },
+  navValue: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.one,
+  },
+  paletteDot: {
+    width: 14,
+    height: 14,
+    borderRadius: 7,
   },
   input: {
     minHeight: 280,
