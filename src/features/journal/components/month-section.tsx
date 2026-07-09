@@ -188,13 +188,7 @@ function DayCell({
         {/* Feeling: a small dot in the cell's top-right corner, in the
             saturated end of its Notion color. */}
         {feelingChip && (
-          <View
-            style={[
-              styles.feelingDot,
-              { backgroundColor: feelingChip.text },
-              cover && styles.feelingDotOverCover,
-            ]}
-          />
+          <View style={[styles.feelingDot, { backgroundColor: feelingChip.text }]} />
         )}
         <CellMark entry={entry} mode={mode} scheme={scheme} overCover={Boolean(cover)} />
         {diaryInCell.length > 0 && (
@@ -304,8 +298,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   dateNumber: {
-    fontSize: 13,
-    lineHeight: 16,
+    fontSize: 12,
+    lineHeight: 15,
   },
   dateNumberOverCover: {
     textShadowColor: 'rgba(0,0,0,0.8)',
@@ -319,10 +313,6 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
-  },
-  feelingDotOverCover: {
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.9)',
   },
   icon: {
     fontSize: 16,
