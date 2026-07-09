@@ -1,7 +1,7 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { GlassContainer, GlassView, isLiquidGlassAvailable } from 'expo-glass-effect';
-import { LayoutList, RotateCw, SlidersHorizontal } from 'lucide-react-native';
+import { GlassView, isLiquidGlassAvailable } from 'expo-glass-effect';
+import { LayoutList, PenLine, RotateCw, SlidersHorizontal } from 'lucide-react-native';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -65,10 +65,11 @@ const CELL_HEIGHT_RATIO = 1.4;
  * rests below the chrome, then slides beneath it while scrolling — which
  * is what makes the glass actually refract.
  */
-const HEADER_BAR_HEIGHT = 44;
-const WEEKDAY_STRIP_HEIGHT = 28;
-const FLOATING_CHROME_HEIGHT =
-  Spacing.two + HEADER_BAR_HEIGHT + Spacing.two + WEEKDAY_STRIP_HEIGHT + Spacing.two;
+const HEADER_BAR_HEIGHT = 36;
+const WEEKDAY_STRIP_HEIGHT = 22;
+const CHROME_PANEL_HEIGHT =
+  Spacing.two * 2 + HEADER_BAR_HEIGHT + Spacing.one + WEEKDAY_STRIP_HEIGHT;
+const FLOATING_CHROME_HEIGHT = Spacing.two + CHROME_PANEL_HEIGHT + Spacing.two;
 /** How far the continuous calendar reaches (months before/after today). */
 const MONTHS_BACK = 24;
 const MONTHS_FORWARD = 1;
@@ -382,102 +383,95 @@ export function CalendarScreen() {
           )}
         </View>
 
-        {/* Floating glass chrome: month title + actions, then the weekday
-            strip. Absolute over the list so the calendar refracts through.
+        {/* Floating glass chrome: ONE panel holding the month title, the
+            action buttons and the weekday row, so nothing floats loose.
+            Absolute over the list so the calendar refracts through.
             (Absolute children ignore the SafeAreaView padding, so the top
             inset is added manually.) */}
-        <View
-          pointerEvents="box-none"
-          style={[styles.floatingHeader, { top: insets.top + Spacing.two }]}>
-          <GlassView
-            glassEffectStyle="regular"
-            style={[styles.titleGlass, !glassOk && { backgroundColor: theme.backgroundElement }]}>
+        <GlassView
+          glassEffectStyle="regular"
+          style={[
+            styles.chromePanel,
+            { top: insets.top + Spacing.two },
+            !glassOk && { backgroundColor: theme.background },
+          ]}>
+          <View style={styles.chromeHeaderRow}>
             <ThemedText type="subtitle">
               {visibleMonth.year}年{visibleMonth.month + 1}月
             </ThemedText>
-          </GlassView>
-          <GlassContainer spacing={10} style={styles.headerActions}>
-            {visibleIndex !== currentMonthIndex && (
-              <GlassView
-                glassEffectStyle="regular"
-                isInteractive
-                tintColor={theme.accentSoft}
-                style={[styles.todayGlass, !glassOk && { backgroundColor: theme.accentSoft }]}>
+            <View style={styles.headerActions}>
+              {visibleIndex !== currentMonthIndex && (
                 <Pressable
                   onPress={scrollToToday}
                   accessibilityRole="button"
                   accessibilityLabel="今日へ移動"
-                  style={styles.glassBtnInner}>
+                  style={[styles.todayBtn, { backgroundColor: theme.accentSoft }]}>
                   <ThemedText type="smallBold" style={{ color: theme.accent }}>
                     今日
                   </ThemedText>
                 </Pressable>
-              </GlassView>
-            )}
-            <GlassView
-              glassEffectStyle="regular"
-              isInteractive
-              style={[styles.actionGlass, !glassOk && { backgroundColor: theme.backgroundElement }]}>
+              )}
               <Pressable
                 onPress={() => router.push('/journal-list')}
                 accessibilityRole="button"
                 accessibilityLabel="日記の一覧"
-                style={styles.glassBtnInner}>
+                style={[styles.actionBtn, { backgroundColor: theme.backgroundElement }]}>
                 <LayoutList size={16} color={theme.textSecondary} strokeWidth={1.8} />
               </Pressable>
-            </GlassView>
-            <GlassView
-              glassEffectStyle="regular"
-              isInteractive
-              style={[styles.actionGlass, !glassOk && { backgroundColor: theme.backgroundElement }]}>
               <Pressable
                 onPress={openModeSheet}
                 accessibilityRole="button"
                 accessibilityLabel="表示モードを切り替え"
-                style={styles.glassBtnInner}>
+                style={[styles.actionBtn, { backgroundColor: theme.backgroundElement }]}>
                 <SlidersHorizontal size={16} color={theme.textSecondary} strokeWidth={1.8} />
               </Pressable>
-            </GlassView>
-            <GlassView
-              glassEffectStyle="regular"
-              isInteractive
-              style={[styles.actionGlass, !glassOk && { backgroundColor: theme.backgroundElement }]}>
               <Pressable
                 onPress={onRefresh}
                 disabled={refreshing}
                 accessibilityRole="button"
                 accessibilityLabel="最新のデータに更新"
-                style={styles.glassBtnInner}>
+                style={[styles.actionBtn, { backgroundColor: theme.backgroundElement }]}>
                 {refreshing ? (
                   <ActivityIndicator size="small" color={theme.textSecondary} />
                 ) : (
                   <RotateCw size={16} color={theme.textSecondary} strokeWidth={1.8} />
                 )}
               </Pressable>
-            </GlassView>
-          </GlassContainer>
-        </View>
-        <GlassView
-          glassEffectStyle="regular"
-          style={[
-            styles.weekdayStrip,
-            { top: insets.top + Spacing.two + HEADER_BAR_HEIGHT + Spacing.two },
-            !glassOk && { backgroundColor: theme.backgroundElement },
-          ]}>
-          {WEEKDAY_LABELS.map((label, i) => (
-            <ThemedText
-              key={label}
-              type="small"
-              themeColor="textSecondary"
-              style={[
-                styles.weekdayLabel,
-                i === 0 && { color: theme.holiday },
-                i === 6 && { color: theme.saturday },
-              ]}>
-              {label}
-            </ThemedText>
-          ))}
+            </View>
+          </View>
+          <View style={styles.chromeWeekdayRow}>
+            {WEEKDAY_LABELS.map((label, i) => (
+              <ThemedText
+                key={label}
+                type="small"
+                themeColor="textSecondary"
+                style={[
+                  styles.weekdayLabel,
+                  i === 0 && { color: theme.holiday },
+                  i === 6 && { color: theme.saturday },
+                ]}>
+                {label}
+              </ThemedText>
+            ))}
+          </View>
         </GlassView>
+
+        {/* Floating pen — the diary tab's quick-capture entry point. */}
+        <Pressable
+          onPress={() => router.push('/capture-sheet')}
+          accessibilityRole="button"
+          accessibilityLabel="きろくを書く"
+          style={({ pressed }) => [
+            styles.fab,
+            { bottom: insets.bottom + Spacing.two, opacity: pressed ? 0.85 : 1 },
+          ]}>
+          <GlassView
+            glassEffectStyle="regular"
+            isInteractive
+            style={[styles.fabGlass, !glassOk && { backgroundColor: theme.accent }]}>
+            <PenLine size={24} color={glassOk ? theme.accent : '#ffffff'} strokeWidth={2} />
+          </GlassView>
+        </Pressable>
       </SafeAreaView>
 
 
@@ -689,49 +683,60 @@ const styles = StyleSheet.create({
     // Slimmer than ScreenContainer's default so calendar cells get the width.
     paddingHorizontal: Spacing.two,
   },
-  floatingHeader: {
+  chromePanel: {
     position: 'absolute',
     left: Spacing.two,
     right: Spacing.two,
+    height: CHROME_PANEL_HEIGHT,
+    borderRadius: 20,
+    overflow: 'hidden',
+    paddingHorizontal: Spacing.three,
+    paddingVertical: Spacing.two,
+    gap: Spacing.one,
+  },
+  chromeHeaderRow: {
     height: HEADER_BAR_HEIGHT,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
   },
-  titleGlass: {
-    height: HEADER_BAR_HEIGHT,
-    borderRadius: HEADER_BAR_HEIGHT / 2,
-    paddingHorizontal: Spacing.three + 2,
-    justifyContent: 'center',
+  chromeWeekdayRow: {
+    // Bleed back out to the panel edge so the labels line up with the
+    // calendar columns below (panel padding would shift them inward).
+    marginHorizontal: -Spacing.three,
+    height: WEEKDAY_STRIP_HEIGHT,
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   headerActions: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.two,
   },
-  todayGlass: {
-    height: 36,
-    borderRadius: 18,
-  },
-  actionGlass: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-  },
-  glassBtnInner: {
-    flex: 1,
+  todayBtn: {
+    height: 32,
+    paddingHorizontal: Spacing.three,
+    borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: Spacing.two + 2,
   },
-  weekdayStrip: {
-    position: 'absolute',
-    left: Spacing.two,
-    right: Spacing.two,
-    height: WEEKDAY_STRIP_HEIGHT,
-    borderRadius: WEEKDAY_STRIP_HEIGHT / 2,
-    flexDirection: 'row',
+  actionBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     alignItems: 'center',
+    justifyContent: 'center',
+  },
+  fab: {
+    position: 'absolute',
+    right: Spacing.four,
+  },
+  fabGlass: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   statusText: {
     textAlign: 'center',

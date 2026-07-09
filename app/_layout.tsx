@@ -22,7 +22,9 @@ export default function RootLayout() {
               name="capture-sheet"
               options={{
                 presentation: 'formSheet',
-                sheetAllowedDetents: 'fitToContents',
+                // Two detents: compact composer, and "pulled up" — reaching
+                // the tall detent morphs into today's full day drawer.
+                sheetAllowedDetents: [0.45, 0.95],
                 sheetGrabberVisible: true,
                 sheetCornerRadius: 24,
               }}

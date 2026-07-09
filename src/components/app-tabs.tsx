@@ -4,14 +4,10 @@ import { useColorScheme } from 'react-native';
 import { Colors } from '@/constants/theme';
 
 /**
- * Bottom tab bar: 日記 / ふりかえり + the detached きろく circle — all the
- * system tab bar (genuine Liquid Glass).
- *
- * The trailing circle is the iOS 26 `role="search"` treatment: the system
- * splits that tab out of the main pill into its own glass circle (the
- * Slack-style layout), which is the only standard-conformant way to get a
- * leading pill + trailing action. きろく opens the quick-capture surface
- * with the input focused. 設定 lives in the diary header's submenu.
+ * Bottom tab bar: 日記 / ふりかえり / 設定 — the system tab bar (genuine
+ * Liquid Glass), centered as UIKit lays it out. Quick capture is not a
+ * tab: the diary screen shows a floating pen that presents the きろく
+ * bottom sheet.
  */
 export default function AppTabs() {
   const scheme = useColorScheme();
@@ -36,11 +32,6 @@ export default function AppTabs() {
       <NativeTabs.Trigger name="settings">
         <NativeTabs.Trigger.Icon sf="gearshape.fill" />
         <NativeTabs.Trigger.Label>設定</NativeTabs.Trigger.Label>
-      </NativeTabs.Trigger>
-
-      <NativeTabs.Trigger name="capture" role="search">
-        <NativeTabs.Trigger.Icon sf="square.and.pencil" />
-        <NativeTabs.Trigger.Label>きろく</NativeTabs.Trigger.Label>
       </NativeTabs.Trigger>
     </NativeTabs>
   );

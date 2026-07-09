@@ -173,11 +173,52 @@ export function CaptureScreen() {
     else router.navigate('/');
   }, [router]);
 
+  // Pulling the sheet up to the tall detent means "I want the full editor":
+  // dismiss the composer and open today's day drawer instead. Detent changes
+  // arrive as the sheet resizing this root view — no event API needed. The
+  // first layout only records the baseline (whatever height the sheet opens
+  // at); only a later jump of 150+pt counts as the user pulling it up.
+  const sheetHeightRef = useRef<number | null>(null);
+  const expandedRef = useRef(false);
+  // UIKit can resize the sheet for the keyboard; that must not count as
+  // the user pulling it up.
+  const keyboardShownRef = useRef(false);
+  useEffect(() => {
+    const show = Keyboard.addListener('keyboardWillShow', () => {
+      keyboardShownRef.current = true;
+    });
+    const hide = Keyboard.addListener('keyboardWillHide', () => {
+      keyboardShownRef.current = false;
+    });
+    return () => {
+      show.remove();
+      hide.remove();
+    };
+  }, []);
+  const handleSheetResize = useCallback(
+    (height: number) => {
+      const prev = sheetHeightRef.current;
+      sheetHeightRef.current = height;
+      if (prev === null || expandedRef.current || keyboardShownRef.current) return;
+      if (height - prev < 150) return;
+      expandedRef.current = true;
+      Keyboard.dismiss();
+      if (router.canGoBack()) router.back();
+      else router.navigate('/');
+      // Let the sheet dismissal start before presenting the drawer.
+      setTimeout(() => {
+        router.navigate({ pathname: '/', params: { date: todayKey } });
+      }, 250);
+    },
+    [router, todayKey],
+  );
+
   const canSend = text.trim().length > 0 && envOk && !appendLog.isPending;
   const hasCover = Boolean(entry.data?.coverUrl);
 
   return (
     <ThemedView
+      onLayout={(e) => handleSheetResize(e.nativeEvent.layout.height)}
       style={[styles.sheet, { paddingBottom: Math.max(insets.bottom, Spacing.three) }]}>
       <View style={styles.header}>
         <View style={styles.headerTitleGroup}>
@@ -289,6 +330,8 @@ export function CaptureScreen() {
 
 const styles = StyleSheet.create({
   sheet: {
+    // Fill the detent so the sheet background is seamless at both sizes.
+    flex: 1,
     paddingHorizontal: Spacing.four,
     paddingTop: Spacing.four,
     gap: Spacing.three,
