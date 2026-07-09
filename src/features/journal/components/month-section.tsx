@@ -310,9 +310,10 @@ const styles = StyleSheet.create({
   feelingDot: {
     position: 'absolute',
     // Top aligned with the date glyph's cap height; right inset mirrors
-    // the date badge's 2pt left inset.
+    // the date GLYPH's visual inset (badge margin 2 + padding 3 ≈ 5-6pt),
+    // not the badge box edge.
     top: 5,
-    right: 2,
+    right: 6,
     width: 8,
     height: 8,
     borderRadius: 4,
