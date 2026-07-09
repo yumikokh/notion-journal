@@ -78,12 +78,14 @@ describe('FeelingPicker (gauge)', () => {
     }
   });
 
-  it('tints every dot with its Notion color even without a colorMap', () => {
-    // Regression guard: options must not fall back to gray `default`.
+  it('tints every dot with its saturated Notion color even without a colorMap', () => {
+    // Regression guards: options must not fall back to gray `default`, and
+    // dots use the strong (text) end of the palette — the pale background
+    // tint was invisible at dot size.
     const nodes = allNodes(render(<FeelingPicker value={null} onChange={jest.fn()} />).toJSON());
     for (const feeling of FEELINGS) {
       const chip = notionChipColor(FEELING_NOTION_COLORS[feeling], SCHEME);
-      expect(dotStyle(nodes, feeling).backgroundColor).toBe(chip.background);
+      expect(dotStyle(nodes, feeling).backgroundColor).toBe(chip.text);
     }
   });
 
@@ -110,9 +112,7 @@ describe('FeelingPicker (gauge)', () => {
         <FeelingPicker value={selected} onChange={jest.fn()} colorMap={{ [selected]: 'green' }} />,
       ).toJSON(),
     );
-    expect(dotStyle(nodes, selected).backgroundColor).toBe(
-      notionChipColor('green', SCHEME).background,
-    );
+    expect(dotStyle(nodes, selected).backgroundColor).toBe(notionChipColor('green', SCHEME).text);
   });
 
   it('shows the placeholder chip when nothing is selected', () => {

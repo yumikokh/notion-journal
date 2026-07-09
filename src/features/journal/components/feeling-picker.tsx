@@ -108,10 +108,12 @@ export function FeelingPicker({ value, onChange, colorMap }: FeelingPickerProps)
               hitSlop={10}
               onPress={() => onChange(value === feeling ? null : feeling)}
               style={styles.stop}>
+              {/* The saturated text color, not the pale chip background —
+                  small dots need the strong end of the palette to read. */}
               <View
                 style={[
                   selected ? styles.dotSelected : styles.dot,
-                  { backgroundColor: chip.background },
+                  { backgroundColor: chip.text },
                   !selected && styles.dotIdle,
                 ]}
               />
@@ -172,7 +174,7 @@ const styles = StyleSheet.create({
     borderRadius: 6,
   },
   dotIdle: {
-    opacity: 0.55,
+    opacity: 0.75,
   },
   dotSelected: {
     width: 20,
