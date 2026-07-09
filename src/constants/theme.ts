@@ -13,26 +13,28 @@ import { Platform } from 'react-native';
  * holiday, blue Sat) but desaturated so the grid stays calm.
  */
 export const Colors = {
+  // Variant E「クールグレー × 鉄墨」— a neutral, tool-like ground where the
+  // accent is a near-monochrome iron ink; photos and kaomoji carry the color.
   light: {
-    text: '#3B342B',
-    background: '#FBF8F3',
-    backgroundElement: '#F2EDE5',
-    backgroundSelected: '#E8E0D2',
-    textSecondary: '#8B8272',
-    accent: '#C67B5C',
-    accentSoft: '#F6E3D9',
+    text: '#2F3033',
+    background: '#F7F7F8',
+    backgroundElement: '#ECEDEF',
+    backgroundSelected: '#E0E1E5',
+    textSecondary: '#85868B',
+    accent: '#3F4043',
+    accentSoft: '#E5E6E9',
     danger: '#C05F5F',
     holiday: '#C67878',
     saturday: '#7B93B5',
   },
   dark: {
-    text: '#EDE6DA',
-    background: '#181512',
-    backgroundElement: '#25211B',
-    backgroundSelected: '#332D24',
-    textSecondary: '#A89E8C',
-    accent: '#D99070',
-    accentSoft: '#3C2E25',
+    text: '#E7E7E9',
+    background: '#171719',
+    backgroundElement: '#222225',
+    backgroundSelected: '#2E2F33',
+    textSecondary: '#9C9DA2',
+    accent: '#B8B9BE',
+    accentSoft: '#2A2B2E',
     danger: '#D98A8A',
     holiday: '#D99090',
     saturday: '#93A8C8',
