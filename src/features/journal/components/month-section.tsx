@@ -311,7 +311,8 @@ const styles = StyleSheet.create({
     // Aligns the dot's top with the date glyph's cap height (badge sits at
     // y=2 with the 12pt number vertically centered in its 18pt height).
     top: 5,
-    right: 3,
+    // Mirrors the date badge's 2pt inset on the left edge.
+    right: 2,
     width: 8,
     height: 8,
     borderRadius: 4,
