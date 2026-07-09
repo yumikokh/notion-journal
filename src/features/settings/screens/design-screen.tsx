@@ -8,7 +8,7 @@ import { BottomTabInset, Palettes, Spacing, type PaletteKey } from '@/constants/
 import { usePalette } from '@/features/settings/palette-context';
 import { useTheme } from '@/hooks/use-theme';
 
-const PALETTE_ORDER: PaletteKey[] = ['terracotta', 'cream', 'coolGray'];
+const PALETTE_ORDER: PaletteKey[] = ['coolGray', 'cream', 'terracotta'];
 
 /**
  * デザイン (palette) picker — each option is a card in its own ground with
