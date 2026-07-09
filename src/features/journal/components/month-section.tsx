@@ -172,25 +172,25 @@ function DayCell({
             <View style={styles.coverDim} />
           </>
         )}
-        <View style={styles.dateRow} accessibilityElementsHidden>
-          <View style={[styles.dateBadge, isToday && { backgroundColor: theme.accent }]}>
-            <ThemedText
-              type="small"
-              style={[
-                styles.dateNumber,
-                { color: isToday ? '#ffffff' : dateColor },
-                cover && !isToday && styles.dateNumberOverCover,
-              ]}>
-              {cell.date.getDate()}
-            </ThemedText>
-          </View>
-          {/* Feeling: a small dot beside the date, vertically centered.
-              The saturated (text) end of the Notion palette — the pale tag
-              tint disappears at dot size. */}
-          {feelingChip && (
-            <View style={[styles.feelingDot, { backgroundColor: feelingChip.text }]} />
-          )}
+        <View
+          style={[styles.dateBadge, isToday && { backgroundColor: theme.accent }]}
+          accessibilityElementsHidden>
+          <ThemedText
+            type="small"
+            style={[
+              styles.dateNumber,
+              { color: isToday ? '#ffffff' : dateColor },
+              cover && !isToday && styles.dateNumberOverCover,
+            ]}>
+            {cell.date.getDate()}
+          </ThemedText>
         </View>
+        {/* Feeling: a small dot in the top-right corner, aligned with the
+            date's glyph. The saturated (text) end of the Notion palette —
+            the pale tag tint disappears at dot size. */}
+        {feelingChip && (
+          <View style={[styles.feelingDot, { backgroundColor: feelingChip.text }]} />
+        )}
         <CellMark entry={entry} mode={mode} scheme={scheme} overCover={Boolean(cover)} />
         {diaryInCell.length > 0 && (
           <ThemedText
@@ -285,15 +285,12 @@ const styles = StyleSheet.create({
     bottom: 0,
     backgroundColor: 'rgba(0,0,0,0.14)',
   },
-  dateRow: {
-    // Top-center, matching the rest of the cell's content.
-    alignSelf: 'center',
-    marginTop: -2,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 1,
-  },
   dateBadge: {
+    // Top-left corner (Notion/Google-calendar style); the rest of the
+    // cell's content stays centered.
+    alignSelf: 'flex-start',
+    marginLeft: 2,
+    marginTop: -2,
     minWidth: 18,
     height: 18,
     borderRadius: 9,
@@ -311,6 +308,11 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   feelingDot: {
+    position: 'absolute',
+    // Top aligned with the date glyph's cap height; right inset mirrors
+    // the date badge's 2pt left inset.
+    top: 5,
+    right: 2,
     width: 8,
     height: 8,
     borderRadius: 4,
